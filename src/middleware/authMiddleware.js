@@ -17,11 +17,20 @@ async function authenticate(req, res, next) {
     const [users] = await pool.query(
       `SELECT users.id, users.name, users.email, users.created_at, users.updated_at,
               roles.id AS role_id, roles.name AS role_name, roles.label AS role_label,
+              companies.id AS company_id, companies.name AS company_name,
+              companies.legal_name AS company_legal_name, companies.code AS company_code,
+              user_profiles.employee_number, user_profiles.position, user_profiles.department,
+              user_profiles.phone, user_profiles.gender, user_profiles.birth_date,
+              user_profiles.avatar_url, user_profiles.address, user_profiles.city,
+              user_profiles.province, user_profiles.country, user_profiles.postal_code,
+              user_profiles.joined_at, user_profiles.bio,
               user_stats.level, user_stats.experience, user_stats.experience_to_next_level,
               user_stats.health_points, user_stats.mana_points, user_stats.strength,
               user_stats.intelligence, user_stats.agility, user_stats.stamina, user_stats.luck
        FROM users
        LEFT JOIN roles ON roles.id = users.role_id
+       LEFT JOIN companies ON companies.id = users.company_id
+       LEFT JOIN user_profiles ON user_profiles.user_id = users.id
        LEFT JOIN user_stats ON user_stats.user_id = users.id
        WHERE users.id = ?
        LIMIT 1`,
@@ -53,6 +62,30 @@ async function authenticate(req, res, next) {
         id: users[0].role_id,
         name: users[0].role_name,
         label: users[0].role_label,
+      },
+      company: users[0].company_id
+        ? {
+            id: users[0].company_id,
+            name: users[0].company_name,
+            legal_name: users[0].company_legal_name,
+            code: users[0].company_code,
+          }
+        : null,
+      profile: {
+        employee_number: users[0].employee_number,
+        position: users[0].position,
+        department: users[0].department,
+        phone: users[0].phone,
+        gender: users[0].gender,
+        birth_date: users[0].birth_date,
+        avatar_url: users[0].avatar_url,
+        address: users[0].address,
+        city: users[0].city,
+        province: users[0].province,
+        country: users[0].country,
+        postal_code: users[0].postal_code,
+        joined_at: users[0].joined_at,
+        bio: users[0].bio,
       },
       stats: {
         level: users[0].level,

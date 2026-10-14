@@ -26,15 +26,59 @@ async function migrate() {
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS companies (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(160) NOT NULL,
+      legal_name VARCHAR(190) NULL,
+      code VARCHAR(60) NULL UNIQUE,
+      email VARCHAR(190) NULL,
+      phone VARCHAR(40) NULL,
+      website VARCHAR(190) NULL,
+      address TEXT NULL,
+      city VARCHAR(120) NULL,
+      province VARCHAR(120) NULL,
+      country VARCHAR(120) NOT NULL DEFAULT 'Indonesia',
+      postal_code VARCHAR(20) NULL,
+      tax_number VARCHAR(80) NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS users (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
       role_id BIGINT UNSIGNED NULL,
+      company_id BIGINT UNSIGNED NULL,
       name VARCHAR(120) NOT NULL,
       email VARCHAR(190) NOT NULL UNIQUE,
       password VARCHAR(255) NOT NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      INDEX users_role_id_index (role_id)
+      INDEX users_role_id_index (role_id),
+      INDEX users_company_id_index (company_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS user_profiles (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      user_id BIGINT UNSIGNED NOT NULL UNIQUE,
+      employee_number VARCHAR(80) NULL UNIQUE,
+      position VARCHAR(120) NULL,
+      department VARCHAR(120) NULL,
+      phone VARCHAR(40) NULL,
+      gender ENUM('male', 'female', 'other') NULL,
+      birth_date DATE NULL,
+      avatar_url VARCHAR(255) NULL,
+      address TEXT NULL,
+      city VARCHAR(120) NULL,
+      province VARCHAR(120) NULL,
+      country VARCHAR(120) NOT NULL DEFAULT 'Indonesia',
+      postal_code VARCHAR(20) NULL,
+      joined_at DATE NULL,
+      bio TEXT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      CONSTRAINT user_profiles_user_id_foreign
+        FOREIGN KEY (user_id) REFERENCES users(id)
+        ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS password_resets (
@@ -188,6 +232,24 @@ async function migrate() {
     await connection.query('ALTER TABLE users ADD INDEX users_role_id_index (role_id)');
   }
 
+  const [companyColumns] = await connection.query(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ?
+       AND TABLE_NAME = 'users'
+       AND COLUMN_NAME = 'company_id'`,
+    [env.database.name]
+  );
+
+  if (!companyColumns.length) {
+    await connection.query(
+      'ALTER TABLE users ADD COLUMN company_id BIGINT UNSIGNED NULL AFTER role_id'
+    );
+    await connection.query(
+      'ALTER TABLE users ADD INDEX users_company_id_index (company_id)'
+    );
+  }
+
   const [constraints] = await connection.query(
     `SELECT CONSTRAINT_NAME
      FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
@@ -207,6 +269,25 @@ async function migrate() {
     );
   }
 
+  const [companyConstraints] = await connection.query(
+    `SELECT CONSTRAINT_NAME
+     FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+     WHERE TABLE_SCHEMA = ?
+       AND TABLE_NAME = 'users'
+       AND COLUMN_NAME = 'company_id'
+       AND REFERENCED_TABLE_NAME = 'companies'`,
+    [env.database.name]
+  );
+
+  if (!companyConstraints.length) {
+    await connection.query(
+      `ALTER TABLE users
+       ADD CONSTRAINT users_company_id_foreign
+       FOREIGN KEY (company_id) REFERENCES companies(id)
+       ON DELETE SET NULL`
+    );
+  }
+
   await connection.query(
     `UPDATE users
      SET role_id = (SELECT id FROM roles WHERE name = 'staff' LIMIT 1)
@@ -219,6 +300,14 @@ async function migrate() {
      FROM users
      LEFT JOIN user_stats ON user_stats.user_id = users.id
      WHERE user_stats.id IS NULL`
+  );
+
+  await connection.query(
+    `INSERT INTO user_profiles (user_id)
+     SELECT users.id
+     FROM users
+     LEFT JOIN user_profiles ON user_profiles.user_id = users.id
+     WHERE user_profiles.id IS NULL`
   );
 
   await connection.query(

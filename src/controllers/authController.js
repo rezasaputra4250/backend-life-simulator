@@ -15,6 +15,30 @@ function formatUser(user) {
       name: user.role_name,
       label: user.role_label,
     },
+    company: user.company_id
+      ? {
+          id: user.company_id,
+          name: user.company_name,
+          legal_name: user.company_legal_name,
+          code: user.company_code,
+        }
+      : null,
+    profile: {
+      employee_number: user.employee_number,
+      position: user.position,
+      department: user.department,
+      phone: user.phone,
+      gender: user.gender,
+      birth_date: user.birth_date,
+      avatar_url: user.avatar_url,
+      address: user.address,
+      city: user.city,
+      province: user.province,
+      country: user.country,
+      postal_code: user.postal_code,
+      joined_at: user.joined_at,
+      bio: user.bio,
+    },
     stats: {
       level: user.level,
       experience: user.experience,
@@ -77,7 +101,7 @@ async function register(req, res, next) {
     const errorResponse = validationErrorResponse(req, res);
     if (errorResponse) return errorResponse;
 
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, company_id } = req.body;
     const [existingUsers] = await pool.query(
       'SELECT id FROM users WHERE email = ? LIMIT 1',
       [email]
@@ -100,13 +124,33 @@ async function register(req, res, next) {
       });
     }
 
+    let company = null;
+
+    if (company_id) {
+      const [companies] = await pool.query(
+        'SELECT id, name, legal_name, code FROM companies WHERE id = ? LIMIT 1',
+        [company_id]
+      );
+
+      if (!companies.length) {
+        return res.status(422).json({
+          message: 'Perusahaan tidak ditemukan.',
+        });
+      }
+
+      company = companies[0];
+    }
+
     const hashedPassword = await bcrypt.hash(password, 12);
     const [result] = await pool.query(
-      'INSERT INTO users (role_id, name, email, password) VALUES (?, ?, ?, ?)',
-      [roles[0].id, name, email, hashedPassword]
+      'INSERT INTO users (role_id, company_id, name, email, password) VALUES (?, ?, ?, ?, ?)',
+      [roles[0].id, company ? company.id : null, name, email, hashedPassword]
     );
 
     await pool.query('INSERT INTO user_stats (user_id) VALUES (?)', [
+      result.insertId,
+    ]);
+    await pool.query('INSERT INTO user_profiles (user_id) VALUES (?)', [
       result.insertId,
     ]);
     await unlockDefaultSkills(result.insertId);
@@ -116,8 +160,26 @@ async function register(req, res, next) {
       role_id: roles[0].id,
       role_name: roles[0].name,
       role_label: roles[0].label,
+      company_id: company ? company.id : null,
+      company_name: company ? company.name : null,
+      company_legal_name: company ? company.legal_name : null,
+      company_code: company ? company.code : null,
       name,
       email,
+      employee_number: null,
+      position: null,
+      department: null,
+      phone: null,
+      gender: null,
+      birth_date: null,
+      avatar_url: null,
+      address: null,
+      city: null,
+      province: null,
+      country: 'Indonesia',
+      postal_code: null,
+      joined_at: null,
+      bio: null,
       level: 1,
       experience: 0,
       experience_to_next_level: 100,
@@ -150,11 +212,20 @@ async function login(req, res, next) {
     const [users] = await pool.query(
       `SELECT users.id, users.name, users.email, users.password,
               roles.id AS role_id, roles.name AS role_name, roles.label AS role_label,
+              companies.id AS company_id, companies.name AS company_name,
+              companies.legal_name AS company_legal_name, companies.code AS company_code,
+              user_profiles.employee_number, user_profiles.position, user_profiles.department,
+              user_profiles.phone, user_profiles.gender, user_profiles.birth_date,
+              user_profiles.avatar_url, user_profiles.address, user_profiles.city,
+              user_profiles.province, user_profiles.country, user_profiles.postal_code,
+              user_profiles.joined_at, user_profiles.bio,
               user_stats.level, user_stats.experience, user_stats.experience_to_next_level,
               user_stats.health_points, user_stats.mana_points, user_stats.strength,
               user_stats.intelligence, user_stats.agility, user_stats.stamina, user_stats.luck
        FROM users
        LEFT JOIN roles ON roles.id = users.role_id
+       LEFT JOIN companies ON companies.id = users.company_id
+       LEFT JOIN user_profiles ON user_profiles.user_id = users.id
        LEFT JOIN user_stats ON user_stats.user_id = users.id
        WHERE users.email = ?
        LIMIT 1`,

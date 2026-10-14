@@ -18,6 +18,10 @@ router.post(
       .optional()
       .isIn(roleNames)
       .withMessage('Role tidak valid.'),
+    body('company_id')
+      .optional({ nullable: true })
+      .isInt({ min: 1 })
+      .withMessage('Perusahaan tidak valid.'),
   ],
   authController.register
 );
