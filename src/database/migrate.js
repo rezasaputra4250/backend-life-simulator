@@ -3,6 +3,7 @@ require('dotenv').config();
 const mysql = require('mysql2/promise');
 const env = require('../config/env');
 const { roles } = require('../constants/roles');
+const { skills } = require('../constants/skills');
 
 async function migrate() {
   const connection = await mysql.createConnection({
@@ -83,6 +84,35 @@ async function migrate() {
         ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS skills (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(80) NOT NULL UNIQUE,
+      label VARCHAR(120) NOT NULL,
+      description TEXT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS user_skills (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      user_id BIGINT UNSIGNED NOT NULL,
+      skill_id BIGINT UNSIGNED NOT NULL,
+      level INT UNSIGNED NOT NULL DEFAULT 1,
+      experience INT UNSIGNED NOT NULL DEFAULT 0,
+      experience_to_next_level INT UNSIGNED NOT NULL DEFAULT 50,
+      unlocked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY user_skills_user_id_skill_id_unique (user_id, skill_id),
+      INDEX user_skills_skill_id_index (skill_id),
+      CONSTRAINT user_skills_user_id_foreign
+        FOREIGN KEY (user_id) REFERENCES users(id)
+        ON DELETE CASCADE,
+      CONSTRAINT user_skills_skill_id_foreign
+        FOREIGN KEY (skill_id) REFERENCES skills(id)
+        ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS todo_lists (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
       user_id BIGINT UNSIGNED NOT NULL,
@@ -128,6 +158,17 @@ async function migrate() {
        VALUES (?, ?)
        ON DUPLICATE KEY UPDATE label = VALUES(label)`,
       [role.name, role.label]
+    );
+  }
+
+  for (const skill of skills) {
+    await connection.query(
+      `INSERT INTO skills (name, label, description)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         label = VALUES(label),
+         description = VALUES(description)`,
+      [skill.name, skill.label, skill.description]
     );
   }
 
@@ -178,6 +219,14 @@ async function migrate() {
      FROM users
      LEFT JOIN user_stats ON user_stats.user_id = users.id
      WHERE user_stats.id IS NULL`
+  );
+
+  await connection.query(
+    `INSERT IGNORE INTO user_skills (user_id, skill_id)
+     SELECT users.id, skills.id
+     FROM users
+     CROSS JOIN skills
+     WHERE skills.name IN ('productivity', 'communication')`
   );
 
   await connection.end();

@@ -27,7 +27,33 @@ function formatUser(user) {
       stamina: user.stamina,
       luck: user.luck,
     },
+    skills: user.skills || [],
   };
+}
+
+async function getUserSkills(userId) {
+  const [skills] = await pool.query(
+    `SELECT skills.id, skills.name, skills.label, skills.description,
+            user_skills.level, user_skills.experience,
+            user_skills.experience_to_next_level, user_skills.unlocked_at
+     FROM user_skills
+     INNER JOIN skills ON skills.id = user_skills.skill_id
+     WHERE user_skills.user_id = ?
+     ORDER BY skills.label ASC`,
+    [userId]
+  );
+
+  return skills;
+}
+
+async function unlockDefaultSkills(userId) {
+  await pool.query(
+    `INSERT IGNORE INTO user_skills (user_id, skill_id)
+     SELECT ?, skills.id
+     FROM skills
+     WHERE skills.name IN ('productivity', 'communication')`,
+    [userId]
+  );
 }
 
 function validationErrorResponse(req, res) {
@@ -83,6 +109,7 @@ async function register(req, res, next) {
     await pool.query('INSERT INTO user_stats (user_id) VALUES (?)', [
       result.insertId,
     ]);
+    await unlockDefaultSkills(result.insertId);
 
     const user = {
       id: result.insertId,
@@ -101,6 +128,7 @@ async function register(req, res, next) {
       agility: 5,
       stamina: 5,
       luck: 5,
+      skills: await getUserSkills(result.insertId),
     };
 
     return res.status(201).json({
@@ -150,7 +178,10 @@ async function login(req, res, next) {
 
     return res.json({
       message: 'Login berhasil.',
-      user: formatUser(user),
+      user: formatUser({
+        ...user,
+        skills: await getUserSkills(user.id),
+      }),
       token: signAuthToken(user),
     });
   } catch (error) {
