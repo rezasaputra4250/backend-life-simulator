@@ -2,6 +2,7 @@ const express = require('express');
 const { body } = require('express-validator');
 const authController = require('../controllers/authController');
 const { authenticate } = require('../middleware/authMiddleware');
+const { roleNames } = require('../constants/roles');
 
 const router = express.Router();
 
@@ -13,6 +14,10 @@ router.post(
     body('password')
       .isLength({ min: 8 })
       .withMessage('Password minimal 8 karakter.'),
+    body('role')
+      .optional()
+      .isIn(roleNames)
+      .withMessage('Role tidak valid.'),
   ],
   authController.register
 );

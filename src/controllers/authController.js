@@ -5,6 +5,19 @@ const env = require('../config/env');
 const { signAuthToken } = require('../utils/jwt');
 const { createResetToken, hashResetToken } = require('../utils/passwordReset');
 
+function formatUser(user) {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: {
+      id: user.role_id,
+      name: user.role_name,
+      label: user.role_label,
+    },
+  };
+}
+
 function validationErrorResponse(req, res) {
   const errors = validationResult(req);
 
@@ -26,7 +39,7 @@ async function register(req, res, next) {
     const errorResponse = validationErrorResponse(req, res);
     if (errorResponse) return errorResponse;
 
-    const { name, email, password } = req.body;
+    const { name, email, password, role } = req.body;
     const [existingUsers] = await pool.query(
       'SELECT id FROM users WHERE email = ? LIMIT 1',
       [email]
@@ -38,21 +51,35 @@ async function register(req, res, next) {
       });
     }
 
+    const [roles] = await pool.query(
+      'SELECT id, name, label FROM roles WHERE name = ? LIMIT 1',
+      [role || 'staff']
+    );
+
+    if (!roles.length) {
+      return res.status(422).json({
+        message: 'Role tidak valid.',
+      });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 12);
     const [result] = await pool.query(
-      'INSERT INTO users (name, email, password) VALUES (?, ?, ?)',
-      [name, email, hashedPassword]
+      'INSERT INTO users (role_id, name, email, password) VALUES (?, ?, ?, ?)',
+      [roles[0].id, name, email, hashedPassword]
     );
 
     const user = {
       id: result.insertId,
+      role_id: roles[0].id,
+      role_name: roles[0].name,
+      role_label: roles[0].label,
       name,
       email,
     };
 
     return res.status(201).json({
       message: 'Registrasi berhasil.',
-      user,
+      user: formatUser(user),
       token: signAuthToken(user),
     });
   } catch (error) {
@@ -67,7 +94,12 @@ async function login(req, res, next) {
 
     const { email, password } = req.body;
     const [users] = await pool.query(
-      'SELECT id, name, email, password FROM users WHERE email = ? LIMIT 1',
+      `SELECT users.id, users.name, users.email, users.password,
+              roles.id AS role_id, roles.name AS role_name, roles.label AS role_label
+       FROM users
+       LEFT JOIN roles ON roles.id = users.role_id
+       WHERE users.email = ?
+       LIMIT 1`,
       [email]
     );
 
@@ -88,11 +120,7 @@ async function login(req, res, next) {
 
     return res.json({
       message: 'Login berhasil.',
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-      },
+      user: formatUser(user),
       token: signAuthToken(user),
     });
   } catch (error) {
