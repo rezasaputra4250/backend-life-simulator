@@ -48,6 +48,44 @@ async function migrate() {
         FOREIGN KEY (user_id) REFERENCES users(id)
         ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS todo_lists (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      user_id BIGINT UNSIGNED NOT NULL,
+      title VARCHAR(160) NOT NULL,
+      description TEXT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX todo_lists_user_id_index (user_id),
+      CONSTRAINT todo_lists_user_id_foreign
+        FOREIGN KEY (user_id) REFERENCES users(id)
+        ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS todo_items (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      todo_list_id BIGINT UNSIGNED NOT NULL,
+      assigned_to BIGINT UNSIGNED NULL,
+      title VARCHAR(180) NOT NULL,
+      description TEXT NULL,
+      status ENUM('pending', 'in_progress', 'completed', 'cancelled') NOT NULL DEFAULT 'pending',
+      priority ENUM('low', 'medium', 'high', 'urgent') NOT NULL DEFAULT 'medium',
+      due_date DATETIME NULL,
+      completed_at DATETIME NULL,
+      sort_order INT UNSIGNED NOT NULL DEFAULT 0,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX todo_items_todo_list_id_index (todo_list_id),
+      INDEX todo_items_assigned_to_index (assigned_to),
+      INDEX todo_items_status_index (status),
+      INDEX todo_items_due_date_index (due_date),
+      CONSTRAINT todo_items_todo_list_id_foreign
+        FOREIGN KEY (todo_list_id) REFERENCES todo_lists(id)
+        ON DELETE CASCADE,
+      CONSTRAINT todo_items_assigned_to_foreign
+        FOREIGN KEY (assigned_to) REFERENCES users(id)
+        ON DELETE SET NULL
+    );
   `);
 
   for (const role of roles) {
