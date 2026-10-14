@@ -16,9 +16,13 @@ async function authenticate(req, res, next) {
     const payload = jwt.verify(token, env.jwt.secret);
     const [users] = await pool.query(
       `SELECT users.id, users.name, users.email, users.created_at, users.updated_at,
-              roles.id AS role_id, roles.name AS role_name, roles.label AS role_label
+              roles.id AS role_id, roles.name AS role_name, roles.label AS role_label,
+              user_stats.level, user_stats.experience, user_stats.experience_to_next_level,
+              user_stats.health_points, user_stats.mana_points, user_stats.strength,
+              user_stats.intelligence, user_stats.agility, user_stats.stamina, user_stats.luck
        FROM users
        LEFT JOIN roles ON roles.id = users.role_id
+       LEFT JOIN user_stats ON user_stats.user_id = users.id
        WHERE users.id = ?
        LIMIT 1`,
       [payload.sub]
@@ -38,6 +42,18 @@ async function authenticate(req, res, next) {
         id: users[0].role_id,
         name: users[0].role_name,
         label: users[0].role_label,
+      },
+      stats: {
+        level: users[0].level,
+        experience: users[0].experience,
+        experience_to_next_level: users[0].experience_to_next_level,
+        health_points: users[0].health_points,
+        mana_points: users[0].mana_points,
+        strength: users[0].strength,
+        intelligence: users[0].intelligence,
+        agility: users[0].agility,
+        stamina: users[0].stamina,
+        luck: users[0].luck,
       },
       created_at: users[0].created_at,
       updated_at: users[0].updated_at,

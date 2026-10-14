@@ -49,6 +49,40 @@ async function migrate() {
         ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS user_stats (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      user_id BIGINT UNSIGNED NOT NULL UNIQUE,
+      level INT UNSIGNED NOT NULL DEFAULT 1,
+      experience INT UNSIGNED NOT NULL DEFAULT 0,
+      experience_to_next_level INT UNSIGNED NOT NULL DEFAULT 100,
+      health_points INT UNSIGNED NOT NULL DEFAULT 100,
+      mana_points INT UNSIGNED NOT NULL DEFAULT 50,
+      strength INT UNSIGNED NOT NULL DEFAULT 5,
+      intelligence INT UNSIGNED NOT NULL DEFAULT 5,
+      agility INT UNSIGNED NOT NULL DEFAULT 5,
+      stamina INT UNSIGNED NOT NULL DEFAULT 5,
+      luck INT UNSIGNED NOT NULL DEFAULT 5,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      CONSTRAINT user_stats_user_id_foreign
+        FOREIGN KEY (user_id) REFERENCES users(id)
+        ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS user_experience_logs (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      user_id BIGINT UNSIGNED NOT NULL,
+      source VARCHAR(120) NOT NULL,
+      amount INT NOT NULL,
+      description TEXT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX user_experience_logs_user_id_index (user_id),
+      INDEX user_experience_logs_source_index (source),
+      CONSTRAINT user_experience_logs_user_id_foreign
+        FOREIGN KEY (user_id) REFERENCES users(id)
+        ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS todo_lists (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
       user_id BIGINT UNSIGNED NOT NULL,
@@ -136,6 +170,14 @@ async function migrate() {
     `UPDATE users
      SET role_id = (SELECT id FROM roles WHERE name = 'staff' LIMIT 1)
      WHERE role_id IS NULL`
+  );
+
+  await connection.query(
+    `INSERT INTO user_stats (user_id)
+     SELECT users.id
+     FROM users
+     LEFT JOIN user_stats ON user_stats.user_id = users.id
+     WHERE user_stats.id IS NULL`
   );
 
   await connection.end();

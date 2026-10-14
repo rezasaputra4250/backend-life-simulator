@@ -15,6 +15,18 @@ function formatUser(user) {
       name: user.role_name,
       label: user.role_label,
     },
+    stats: {
+      level: user.level,
+      experience: user.experience,
+      experience_to_next_level: user.experience_to_next_level,
+      health_points: user.health_points,
+      mana_points: user.mana_points,
+      strength: user.strength,
+      intelligence: user.intelligence,
+      agility: user.agility,
+      stamina: user.stamina,
+      luck: user.luck,
+    },
   };
 }
 
@@ -68,6 +80,10 @@ async function register(req, res, next) {
       [roles[0].id, name, email, hashedPassword]
     );
 
+    await pool.query('INSERT INTO user_stats (user_id) VALUES (?)', [
+      result.insertId,
+    ]);
+
     const user = {
       id: result.insertId,
       role_id: roles[0].id,
@@ -75,6 +91,16 @@ async function register(req, res, next) {
       role_label: roles[0].label,
       name,
       email,
+      level: 1,
+      experience: 0,
+      experience_to_next_level: 100,
+      health_points: 100,
+      mana_points: 50,
+      strength: 5,
+      intelligence: 5,
+      agility: 5,
+      stamina: 5,
+      luck: 5,
     };
 
     return res.status(201).json({
@@ -95,9 +121,13 @@ async function login(req, res, next) {
     const { email, password } = req.body;
     const [users] = await pool.query(
       `SELECT users.id, users.name, users.email, users.password,
-              roles.id AS role_id, roles.name AS role_name, roles.label AS role_label
+              roles.id AS role_id, roles.name AS role_name, roles.label AS role_label,
+              user_stats.level, user_stats.experience, user_stats.experience_to_next_level,
+              user_stats.health_points, user_stats.mana_points, user_stats.strength,
+              user_stats.intelligence, user_stats.agility, user_stats.stamina, user_stats.luck
        FROM users
        LEFT JOIN roles ON roles.id = users.role_id
+       LEFT JOIN user_stats ON user_stats.user_id = users.id
        WHERE users.email = ?
        LIMIT 1`,
       [email]
