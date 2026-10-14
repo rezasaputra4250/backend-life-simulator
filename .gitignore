@@ -1,6 +1,76 @@
+# Dependencies
 node_modules/
+jspm_packages/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.env
-.env.*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage and test output
+coverage/
+.nyc_output/
+junit.xml
+
+# Build output
+dist/
+build/
+out/
+public/build/
+
+# Cache
+.cache/
+.parcel-cache/
+.eslintcache
+.stylelintcache
+.vite/
+.turbo/
+
+# Package manager files
+.npm/
+.pnpm-store/
+
+# Optional npm cache directory
+.npm-cache/
+
+# TypeScript
+*.tsbuildinfo
+
+# Uploaded/generated files
+uploads/
+tmp/
+temp/
+
+# OS files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Editor and IDE files
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+*.swo
+
+# Local certificates and secrets
+*.pem
+*.key
+*.crt
