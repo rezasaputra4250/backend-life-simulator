@@ -1,0 +1,49 @@
+require('dotenv').config();
+
+const mysql = require('mysql2/promise');
+const env = require('../config/env');
+
+async function migrate() {
+  const connection = await mysql.createConnection({
+    host: env.database.host,
+    port: env.database.port,
+    user: env.database.user,
+    password: env.database.password,
+    multipleStatements: true,
+  });
+
+  await connection.query(`CREATE DATABASE IF NOT EXISTS \`${env.database.name}\``);
+  await connection.query(`USE \`${env.database.name}\``);
+
+  await connection.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(120) NOT NULL,
+      email VARCHAR(190) NOT NULL UNIQUE,
+      password VARCHAR(255) NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS password_resets (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      user_id BIGINT UNSIGNED NOT NULL,
+      token_hash VARCHAR(64) NOT NULL,
+      expires_at DATETIME NOT NULL,
+      used_at DATETIME NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX password_resets_token_hash_index (token_hash),
+      CONSTRAINT password_resets_user_id_foreign
+        FOREIGN KEY (user_id) REFERENCES users(id)
+        ON DELETE CASCADE
+    );
+  `);
+
+  await connection.end();
+  console.log('Migrasi database selesai.');
+}
+
+migrate().catch((error) => {
+  console.error('Migrasi database gagal:', error.message);
+  process.exit(1);
+});
