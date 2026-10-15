@@ -128,6 +128,74 @@ async function migrate() {
         ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS missions (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      user_id BIGINT UNSIGNED NOT NULL,
+      mission_date DATE NOT NULL DEFAULT '1970-01-01',
+      title VARCHAR(180) NOT NULL,
+      detail VARCHAR(255) NULL,
+      reward INT UNSIGNED NOT NULL DEFAULT 0,
+      reward_type ENUM('xp', 'skill', 'item', 'badge') NOT NULL DEFAULT 'xp',
+      reward_name VARCHAR(160) NULL,
+      reward_key VARCHAR(100) NULL,
+      completed TINYINT(1) NOT NULL DEFAULT 0,
+      completed_at DATETIME NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY missions_user_id_title_date_unique (user_id, title, mission_date),
+      INDEX missions_user_id_completed_index (user_id, completed),
+      CONSTRAINT missions_user_id_foreign
+        FOREIGN KEY (user_id) REFERENCES users(id)
+        ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS user_rewards (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      user_id BIGINT UNSIGNED NOT NULL,
+      mission_id BIGINT UNSIGNED NOT NULL,
+      reward_type ENUM('xp', 'skill', 'item', 'badge') NOT NULL,
+      reward_name VARCHAR(160) NOT NULL,
+      amount INT UNSIGNED NOT NULL DEFAULT 1,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY user_rewards_mission_unique (user_id, mission_id),
+      INDEX user_rewards_user_id_index (user_id),
+      CONSTRAINT user_rewards_user_id_foreign
+        FOREIGN KEY (user_id) REFERENCES users(id)
+        ON DELETE CASCADE,
+      CONSTRAINT user_rewards_mission_id_foreign
+        FOREIGN KEY (mission_id) REFERENCES missions(id)
+        ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS user_inventory (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      user_id BIGINT UNSIGNED NOT NULL,
+      item_key VARCHAR(100) NOT NULL,
+      name VARCHAR(160) NOT NULL,
+      description VARCHAR(255) NULL,
+      icon_key VARCHAR(80) NULL,
+      quantity INT UNSIGNED NOT NULL DEFAULT 0,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY user_inventory_user_item_unique (user_id, item_key),
+      CONSTRAINT user_inventory_user_id_foreign
+        FOREIGN KEY (user_id) REFERENCES users(id)
+        ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS user_badges (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      user_id BIGINT UNSIGNED NOT NULL,
+      badge_key VARCHAR(100) NOT NULL,
+      name VARCHAR(160) NOT NULL,
+      description VARCHAR(255) NULL,
+      unlocked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY user_badges_user_badge_unique (user_id, badge_key),
+      CONSTRAINT user_badges_user_id_foreign
+        FOREIGN KEY (user_id) REFERENCES users(id)
+        ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS skills (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
       name VARCHAR(80) NOT NULL UNIQUE,
@@ -195,6 +263,62 @@ async function migrate() {
         ON DELETE SET NULL
     );
   `);
+
+  const [missionColumns] = await connection.query(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ?
+       AND TABLE_NAME = 'missions'
+       AND COLUMN_NAME IN ('mission_date', 'reward_type', 'reward_name', 'reward_key')`,
+    [env.database.name]
+  );
+  const missionColumnNames = missionColumns.map((column) => column.COLUMN_NAME);
+
+  if (!missionColumnNames.includes('mission_date')) {
+    await connection.query(
+      'ALTER TABLE missions ADD COLUMN mission_date DATE NULL AFTER user_id'
+    );
+    await connection.query(
+      'UPDATE missions SET mission_date = DATE(created_at) WHERE mission_date IS NULL'
+    );
+    await connection.query(
+      "ALTER TABLE missions MODIFY COLUMN mission_date DATE NOT NULL DEFAULT '1970-01-01'"
+    );
+  }
+
+  if (!missionColumnNames.includes('reward_type')) {
+    await connection.query(
+      `ALTER TABLE missions
+       ADD COLUMN reward_type ENUM('xp', 'skill', 'item', 'badge') NOT NULL DEFAULT 'xp' AFTER reward`
+    );
+  }
+
+  if (!missionColumnNames.includes('reward_name')) {
+    await connection.query(
+      'ALTER TABLE missions ADD COLUMN reward_name VARCHAR(160) NULL AFTER reward_type'
+    );
+  }
+
+  if (!missionColumnNames.includes('reward_key')) {
+    await connection.query(
+      'ALTER TABLE missions ADD COLUMN reward_key VARCHAR(100) NULL AFTER reward_name'
+    );
+  }
+
+  const [missionIndexes] = await connection.query(
+    `SELECT DISTINCT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'missions'`,
+    [env.database.name]
+  );
+  const missionIndexNames = missionIndexes.map((index) => index.INDEX_NAME);
+  if (missionIndexNames.includes('missions_user_id_title_unique')) {
+    await connection.query('ALTER TABLE missions DROP INDEX missions_user_id_title_unique');
+  }
+  if (!missionIndexNames.includes('missions_user_id_title_date_unique')) {
+    await connection.query(
+      'ALTER TABLE missions ADD UNIQUE KEY missions_user_id_title_date_unique (user_id, title, mission_date)'
+    );
+  }
 
   for (const role of roles) {
     await connection.query(
@@ -317,6 +441,19 @@ async function migrate() {
      CROSS JOIN skills
      WHERE skills.name IN ('productivity', 'communication')`
   );
+
+  for (const mission of require('../constants/missions').missionSeeds) {
+    await connection.query(
+      `INSERT INTO missions
+         (user_id, mission_date, title, detail, reward, reward_type, reward_name, reward_key)
+       SELECT users.id, CURDATE(), ?, ?, ?, ?, ?, ? FROM users
+       ON DUPLICATE KEY UPDATE
+         detail = VALUES(detail), reward = VALUES(reward),
+         reward_type = VALUES(reward_type), reward_name = VALUES(reward_name),
+         reward_key = VALUES(reward_key)`,
+      [mission.title, mission.detail, mission.reward, mission.reward_type, mission.reward_name, mission.reward_key]
+    );
+  }
 
   await connection.end();
   console.log('Migrasi database selesai.');

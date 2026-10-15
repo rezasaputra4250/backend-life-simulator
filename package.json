@@ -6,6 +6,7 @@
     "dev": "nodemon index.js",
     "start": "node index.js",
     "migrate": "node src/database/migrate.js",
+    "seed:missions": "node src/database/seedMissions.js",
     "test": "echo \"Belum ada test yang dikonfigurasi\" && exit 0"
   },
   "keywords": [],

@@ -4,6 +4,7 @@ const pool = require('../config/database');
 const env = require('../config/env');
 const { signAuthToken } = require('../utils/jwt');
 const { createResetToken, hashResetToken } = require('../utils/passwordReset');
+const { missionSeeds } = require('../constants/missions');
 
 function formatUser(user) {
   return {
@@ -80,6 +81,25 @@ async function unlockDefaultSkills(userId) {
   );
 }
 
+async function createDefaultMissions(userId) {
+  for (const mission of missionSeeds) {
+    await pool.query(
+      `INSERT IGNORE INTO missions
+         (user_id, mission_date, title, detail, reward, reward_type, reward_name, reward_key)
+       VALUES (?, CURDATE(), ?, ?, ?, ?, ?, ?)`,
+      [
+        userId,
+        mission.title,
+        mission.detail,
+        mission.reward,
+        mission.reward_type,
+        mission.reward_name,
+        mission.reward_key,
+      ]
+    );
+  }
+}
+
 function validationErrorResponse(req, res) {
   const errors = validationResult(req);
 
@@ -154,6 +174,7 @@ async function register(req, res, next) {
       result.insertId,
     ]);
     await unlockDefaultSkills(result.insertId);
+    await createDefaultMissions(result.insertId);
 
     const user = {
       id: result.insertId,

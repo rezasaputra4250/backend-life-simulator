@@ -43,6 +43,17 @@ async function authenticate(req, res, next) {
       });
     }
 
+    await pool.query(
+      `INSERT IGNORE INTO user_skills (user_id, skill_id)
+       SELECT ?, skills.id
+       FROM missions
+       INNER JOIN skills ON skills.name = missions.reward_key
+       WHERE missions.user_id = ?
+         AND missions.reward_type = 'skill'
+         AND missions.completed = 1`,
+      [users[0].id, users[0].id]
+    );
+
     const [skills] = await pool.query(
       `SELECT skills.id, skills.name, skills.label, skills.description,
               user_skills.level, user_skills.experience,
