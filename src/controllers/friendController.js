@@ -53,12 +53,32 @@ async function search(req, res, next) {
 
     const searchValue = `%${query}%`;
     const [users] = await pool.query(
-      `SELECT id, name, email
+      `SELECT users.id, users.name, users.email,
+              CASE
+                WHEN EXISTS (
+                  SELECT 1 FROM friendships
+                  WHERE (friendships.user_one_id = LEAST(?, users.id)
+                     AND friendships.user_two_id = GREATEST(?, users.id))
+                ) THEN 'friends'
+                WHEN EXISTS (
+                  SELECT 1 FROM friend_requests
+                  WHERE friend_requests.requester_id = ?
+                    AND friend_requests.addressee_id = users.id
+                    AND friend_requests.status = 'pending'
+                ) THEN 'request_sent'
+                WHEN EXISTS (
+                  SELECT 1 FROM friend_requests
+                  WHERE friend_requests.requester_id = users.id
+                    AND friend_requests.addressee_id = ?
+                    AND friend_requests.status = 'pending'
+                ) THEN 'request_received'
+                ELSE 'none'
+              END AS relationship_status
        FROM users
-       WHERE id <> ? AND (name LIKE ? OR email LIKE ?)
-       ORDER BY name ASC
+       WHERE users.id <> ? AND (users.name LIKE ? OR users.email LIKE ?)
+       ORDER BY users.name ASC
        LIMIT 20`,
-      [req.user.id, searchValue, searchValue]
+      [req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, searchValue, searchValue]
     );
 
     return res.json({ message: 'Pengguna berhasil dicari.', users });
@@ -106,7 +126,7 @@ async function request(req, res, next) {
           'INSERT IGNORE INTO friendships (user_one_id, user_two_id) VALUES (?, ?)',
           [userOneId, userTwoId]
         );
-        return res.json({ message: 'Permintaan pertemanan diterima. Kalian sekarang berteman.' });
+        return res.json({ message: 'Permintaan pertemanan diterima. Kalian sekarang berteman.', data: { user_id: targetId, status: 'friends' } });
       }
       return res.status(409).json({ message: 'Permintaan pertemanan sudah dikirim.' });
     }
@@ -123,7 +143,7 @@ async function request(req, res, next) {
       [targetId, `${req.user.name} ingin berteman denganmu.`, req.user.id]
     );
 
-    return res.status(201).json({ message: 'Permintaan pertemanan berhasil dikirim.' });
+    return res.status(201).json({ message: 'Permintaan pertemanan berhasil dikirim.', data: { user_id: targetId, status: 'request_sent' } });
   } catch (error) {
     return next(error);
   }
