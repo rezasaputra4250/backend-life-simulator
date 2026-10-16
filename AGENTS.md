@@ -12,6 +12,7 @@
 ## Alur Git
 
 - Alur branch utama: `local` -> `develop` -> `staging` -> `main`.
+- Setelah setiap perubahan selesai, termasuk perubahan kecil, jalankan validasi yang relevan lalu buat commit dengan pesan yang jelas.
 - Jangan commit `node_modules/`, `.env`, log, hasil build, folder cache, upload, atau secret lokal.
 - Gunakan `.env.example` untuk mendokumentasikan environment variable jika diperlukan.
 
