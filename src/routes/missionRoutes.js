@@ -12,5 +12,10 @@ router.patch(
   [param('id').isInt({ min: 1 }).withMessage('ID misi tidak valid.')],
   missionController.toggle
 );
+router.patch(
+  '/:id/cancel',
+  [param('id').isInt({ min: 1 }).withMessage('ID misi tidak valid.')],
+  missionController.cancel
+);
 
 module.exports = router;

@@ -4,13 +4,16 @@ const pool = require('../config/database');
 const env = require('../config/env');
 const { signAuthToken } = require('../utils/jwt');
 const { createResetToken, hashResetToken } = require('../utils/passwordReset');
-const { missionSeeds } = require('../constants/missions');
+const { allMissionSeeds } = require('../constants/missions');
+const { generateAffiliateCode } = require('../utils/affiliate');
 
 function formatUser(user) {
   return {
     id: user.id,
     name: user.name,
     email: user.email,
+    affiliate_code: user.affiliate_code,
+    referred_by: user.referred_by,
     role: {
       id: user.role_id,
       name: user.role_name,
@@ -82,13 +85,20 @@ async function unlockDefaultSkills(userId) {
 }
 
 async function createDefaultMissions(userId) {
-  for (const mission of missionSeeds) {
+  for (const mission of allMissionSeeds) {
     await pool.query(
       `INSERT IGNORE INTO missions
-         (user_id, mission_date, title, detail, reward, reward_type, reward_name, reward_key)
-       VALUES (?, CURDATE(), ?, ?, ?, ?, ?, ?)`,
+         (user_id, mission_date, frequency, scheduled_time, title, detail, reward, reward_type, reward_name, reward_key)
+       VALUES (?, CASE ?
+         WHEN 'daily' THEN CURDATE()
+         WHEN 'weekly' THEN DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)
+         ELSE DATE_FORMAT(CURDATE(), '%Y-%m-01')
+       END, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         userId,
+        mission.frequency || 'daily',
+        mission.frequency || 'daily',
+        mission.scheduled_time,
         mission.title,
         mission.detail,
         mission.reward,
@@ -121,7 +131,7 @@ async function register(req, res, next) {
     const errorResponse = validationErrorResponse(req, res);
     if (errorResponse) return errorResponse;
 
-    const { name, email, password, role, company_id } = req.body;
+    const { name, email, password, role, company_id, referral_code } = req.body;
     const [existingUsers] = await pool.query(
       'SELECT id FROM users WHERE email = ? LIMIT 1',
       [email]
@@ -145,6 +155,7 @@ async function register(req, res, next) {
     }
 
     let company = null;
+    let referrer = null;
 
     if (company_id) {
       const [companies] = await pool.query(
@@ -161,16 +172,53 @@ async function register(req, res, next) {
       company = companies[0];
     }
 
+    if (referral_code) {
+      const [referrers] = await pool.query(
+        'SELECT id, affiliate_code FROM users WHERE affiliate_code = ? LIMIT 1',
+        [referral_code.toUpperCase()]
+      );
+
+      if (!referrers.length) {
+        return res.status(422).json({ message: 'Kode referral tidak ditemukan.' });
+      }
+
+      referrer = referrers[0];
+    }
+
     const hashedPassword = await bcrypt.hash(password, 12);
+    let affiliateCode = generateAffiliateCode();
+    let duplicateCodes;
+
+    do {
+      [duplicateCodes] = await pool.query(
+        'SELECT id FROM users WHERE affiliate_code = ? LIMIT 1',
+        [affiliateCode]
+      );
+      if (duplicateCodes.length) affiliateCode = generateAffiliateCode();
+    } while (duplicateCodes.length);
+
     const [result] = await pool.query(
-      'INSERT INTO users (role_id, company_id, name, email, password) VALUES (?, ?, ?, ?, ?)',
-      [roles[0].id, company ? company.id : null, name, email, hashedPassword]
+      `INSERT INTO users
+         (role_id, company_id, name, email, password, affiliate_code, referred_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [roles[0].id, company ? company.id : null, name, email, hashedPassword, affiliateCode, referrer ? referrer.id : null]
     );
+
+    if (referrer) {
+      await pool.query(
+        `INSERT INTO affiliate_referrals (affiliate_user_id, referred_user_id, referral_code)
+         VALUES (?, ?, ?)`,
+        [referrer.id, result.insertId, referrer.affiliate_code]
+      );
+    }
 
     await pool.query('INSERT INTO user_stats (user_id) VALUES (?)', [
       result.insertId,
     ]);
     await pool.query('INSERT INTO user_profiles (user_id) VALUES (?)', [
+      result.insertId,
+    ]);
+    await pool.query('INSERT INTO notification_preferences (user_id) VALUES (?)', [
       result.insertId,
     ]);
     await unlockDefaultSkills(result.insertId);
@@ -187,6 +235,8 @@ async function register(req, res, next) {
       company_code: company ? company.code : null,
       name,
       email,
+      affiliate_code: affiliateCode,
+      referred_by: referrer ? referrer.id : null,
       employee_number: null,
       position: null,
       department: null,
@@ -232,6 +282,7 @@ async function login(req, res, next) {
     const { email, password } = req.body;
     const [users] = await pool.query(
       `SELECT users.id, users.name, users.email, users.password,
+              users.affiliate_code, users.referred_by,
               roles.id AS role_id, roles.name AS role_name, roles.label AS role_label,
               companies.id AS company_id, companies.name AS company_name,
               companies.legal_name AS company_legal_name, companies.code AS company_code,

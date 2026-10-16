@@ -22,6 +22,12 @@ router.post(
       .optional({ nullable: true })
       .isInt({ min: 1 })
       .withMessage('Perusahaan tidak valid.'),
+    body('referral_code')
+      .optional({ nullable: true })
+      .trim()
+      .isLength({ min: 6, max: 32 })
+      .matches(/^[A-Z0-9]+$/i)
+      .withMessage('Kode referral tidak valid.'),
   ],
   authController.register
 );
