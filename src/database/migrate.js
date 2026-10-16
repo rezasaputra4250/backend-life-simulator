@@ -51,10 +51,16 @@ async function migrate() {
       name VARCHAR(120) NOT NULL,
       email VARCHAR(190) NOT NULL UNIQUE,
       password VARCHAR(255) NOT NULL,
+      affiliate_code VARCHAR(32) NULL UNIQUE,
+      referred_by BIGINT UNSIGNED NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX users_role_id_index (role_id),
-      INDEX users_company_id_index (company_id)
+      INDEX users_company_id_index (company_id),
+      INDEX users_referred_by_index (referred_by),
+      CONSTRAINT users_referred_by_foreign
+        FOREIGN KEY (referred_by) REFERENCES users(id)
+        ON DELETE SET NULL
     );
 
     CREATE TABLE IF NOT EXISTS user_profiles (
@@ -78,6 +84,133 @@ async function migrate() {
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       CONSTRAINT user_profiles_user_id_foreign
         FOREIGN KEY (user_id) REFERENCES users(id)
+        ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS affiliate_referrals (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      affiliate_user_id BIGINT UNSIGNED NOT NULL,
+      referred_user_id BIGINT UNSIGNED NOT NULL,
+      referral_code VARCHAR(32) NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY affiliate_referrals_referred_user_unique (referred_user_id),
+      INDEX affiliate_referrals_affiliate_user_index (affiliate_user_id),
+      CONSTRAINT affiliate_referrals_affiliate_user_foreign
+        FOREIGN KEY (affiliate_user_id) REFERENCES users(id)
+        ON DELETE CASCADE,
+      CONSTRAINT affiliate_referrals_referred_user_foreign
+        FOREIGN KEY (referred_user_id) REFERENCES users(id)
+        ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS friend_requests (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      requester_id BIGINT UNSIGNED NOT NULL,
+      addressee_id BIGINT UNSIGNED NOT NULL,
+      status ENUM('pending', 'accepted', 'rejected') NOT NULL DEFAULT 'pending',
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY friend_requests_pair_unique (requester_id, addressee_id),
+      INDEX friend_requests_addressee_status_index (addressee_id, status),
+      CONSTRAINT friend_requests_requester_foreign
+        FOREIGN KEY (requester_id) REFERENCES users(id)
+        ON DELETE CASCADE,
+      CONSTRAINT friend_requests_addressee_foreign
+        FOREIGN KEY (addressee_id) REFERENCES users(id)
+        ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS friendships (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      user_one_id BIGINT UNSIGNED NOT NULL,
+      user_two_id BIGINT UNSIGNED NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY friendships_pair_unique (user_one_id, user_two_id),
+      CONSTRAINT friendships_user_one_foreign
+        FOREIGN KEY (user_one_id) REFERENCES users(id)
+        ON DELETE CASCADE,
+      CONSTRAINT friendships_user_two_foreign
+        FOREIGN KEY (user_two_id) REFERENCES users(id)
+        ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS parties (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      owner_id BIGINT UNSIGNED NOT NULL,
+      name VARCHAR(120) NOT NULL,
+      max_members INT UNSIGNED NOT NULL DEFAULT 5,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX parties_owner_id_index (owner_id),
+      CONSTRAINT parties_owner_foreign
+        FOREIGN KEY (owner_id) REFERENCES users(id)
+        ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS party_members (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      party_id BIGINT UNSIGNED NOT NULL,
+      user_id BIGINT UNSIGNED NOT NULL,
+      role ENUM('owner', 'member') NOT NULL DEFAULT 'member',
+      joined_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY party_members_pair_unique (party_id, user_id),
+      INDEX party_members_user_id_index (user_id),
+      CONSTRAINT party_members_party_foreign
+        FOREIGN KEY (party_id) REFERENCES parties(id)
+        ON DELETE CASCADE,
+      CONSTRAINT party_members_user_foreign
+        FOREIGN KEY (user_id) REFERENCES users(id)
+        ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS guilds (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      owner_id BIGINT UNSIGNED NOT NULL,
+      name VARCHAR(120) NOT NULL,
+      description VARCHAR(255) NULL,
+      max_members INT UNSIGNED NOT NULL DEFAULT 20,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX guilds_owner_id_index (owner_id),
+      CONSTRAINT guilds_owner_foreign
+        FOREIGN KEY (owner_id) REFERENCES users(id)
+        ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS guild_members (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      guild_id BIGINT UNSIGNED NOT NULL,
+      user_id BIGINT UNSIGNED NOT NULL,
+      role ENUM('owner', 'member') NOT NULL DEFAULT 'member',
+      joined_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY guild_members_pair_unique (guild_id, user_id),
+      INDEX guild_members_user_id_index (user_id),
+      CONSTRAINT guild_members_guild_foreign
+        FOREIGN KEY (guild_id) REFERENCES guilds(id)
+        ON DELETE CASCADE,
+      CONSTRAINT guild_members_user_foreign
+        FOREIGN KEY (user_id) REFERENCES users(id)
+        ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS guild_invitations (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      guild_id BIGINT UNSIGNED NOT NULL,
+      inviter_id BIGINT UNSIGNED NOT NULL,
+      invitee_id BIGINT UNSIGNED NOT NULL,
+      status ENUM('pending', 'accepted', 'rejected') NOT NULL DEFAULT 'pending',
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY guild_invitations_pair_unique (guild_id, invitee_id),
+      INDEX guild_invitations_invitee_status_index (invitee_id, status),
+      CONSTRAINT guild_invitations_guild_foreign
+        FOREIGN KEY (guild_id) REFERENCES guilds(id)
+        ON DELETE CASCADE,
+      CONSTRAINT guild_invitations_inviter_foreign
+        FOREIGN KEY (inviter_id) REFERENCES users(id)
+        ON DELETE CASCADE,
+      CONSTRAINT guild_invitations_invitee_foreign
+        FOREIGN KEY (invitee_id) REFERENCES users(id)
         ON DELETE CASCADE
     );
 
@@ -131,7 +264,15 @@ async function migrate() {
     CREATE TABLE IF NOT EXISTS missions (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
       user_id BIGINT UNSIGNED NOT NULL,
+      category ENUM('system', 'personal', 'guild') NOT NULL DEFAULT 'system',
+      guild_id BIGINT UNSIGNED NULL,
+      target_progress INT UNSIGNED NOT NULL DEFAULT 1,
+      current_progress INT UNSIGNED NOT NULL DEFAULT 0,
+      status ENUM('active', 'completed', 'cancelled') NOT NULL DEFAULT 'active',
+      legacy_guild_mission_id BIGINT UNSIGNED NULL,
       mission_date DATE NOT NULL DEFAULT '1970-01-01',
+      frequency ENUM('daily', 'weekly', 'monthly') NOT NULL DEFAULT 'daily',
+      scheduled_time TIME NULL,
       title VARCHAR(180) NOT NULL,
       detail VARCHAR(255) NULL,
       reward INT UNSIGNED NOT NULL DEFAULT 0,
@@ -140,12 +281,18 @@ async function migrate() {
       reward_key VARCHAR(100) NULL,
       completed TINYINT(1) NOT NULL DEFAULT 0,
       completed_at DATETIME NULL,
+      failed TINYINT(1) NOT NULL DEFAULT 0,
+      failed_at DATETIME NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      UNIQUE KEY missions_user_id_title_date_unique (user_id, title, mission_date),
+      UNIQUE KEY missions_owner_scope_title_date_unique (user_id, category, guild_id, title, mission_date),
       INDEX missions_user_id_completed_index (user_id, completed),
+      INDEX missions_guild_status_index (guild_id, status),
       CONSTRAINT missions_user_id_foreign
         FOREIGN KEY (user_id) REFERENCES users(id)
+        ON DELETE CASCADE,
+      CONSTRAINT missions_guild_foreign
+        FOREIGN KEY (guild_id) REFERENCES guilds(id)
         ON DELETE CASCADE
     );
 
@@ -262,17 +409,255 @@ async function migrate() {
         FOREIGN KEY (assigned_to) REFERENCES users(id)
         ON DELETE SET NULL
     );
+
+    CREATE TABLE IF NOT EXISTS player_classes (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(80) NOT NULL UNIQUE,
+      label VARCHAR(120) NOT NULL,
+      description TEXT NULL,
+      primary_stat ENUM('strength', 'intelligence', 'agility', 'stamina', 'luck') NOT NULL DEFAULT 'stamina',
+      strength_bonus INT NOT NULL DEFAULT 0,
+      intelligence_bonus INT NOT NULL DEFAULT 0,
+      agility_bonus INT NOT NULL DEFAULT 0,
+      stamina_bonus INT NOT NULL DEFAULT 0,
+      luck_bonus INT NOT NULL DEFAULT 0,
+      is_active TINYINT(1) NOT NULL DEFAULT 1,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS player_class_progressions (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      class_id BIGINT UNSIGNED NOT NULL,
+      level INT UNSIGNED NOT NULL,
+      title VARCHAR(120) NOT NULL,
+      description VARCHAR(255) NULL,
+      reward_skill_key VARCHAR(80) NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY class_progression_level_unique (class_id, level),
+      CONSTRAINT class_progression_class_foreign FOREIGN KEY (class_id) REFERENCES player_classes(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS user_classes (
+      user_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+      class_id BIGINT UNSIGNED NOT NULL,
+      selected_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT user_classes_user_foreign FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      CONSTRAINT user_classes_class_foreign FOREIGN KEY (class_id) REFERENCES player_classes(id) ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS mission_templates (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      title VARCHAR(180) NOT NULL,
+      detail VARCHAR(255) NULL,
+      category ENUM('system', 'personal', 'guild') NOT NULL DEFAULT 'system',
+      difficulty ENUM('easy', 'medium', 'hard', 'epic') NOT NULL DEFAULT 'easy',
+      duration_minutes INT UNSIGNED NOT NULL DEFAULT 15,
+      reward_xp INT UNSIGNED NOT NULL DEFAULT 10,
+      reward_type ENUM('xp', 'skill', 'item', 'badge') NOT NULL DEFAULT 'xp',
+      reward_key VARCHAR(100) NULL,
+      is_active TINYINT(1) NOT NULL DEFAULT 1,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS notifications (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      user_id BIGINT UNSIGNED NOT NULL,
+      type VARCHAR(60) NOT NULL,
+      title VARCHAR(160) NOT NULL,
+      body VARCHAR(255) NOT NULL,
+      data JSON NULL,
+      read_at DATETIME NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX notifications_user_read_index (user_id, read_at),
+      CONSTRAINT notifications_user_foreign FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS notification_preferences (
+      user_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+      in_app_enabled TINYINT(1) NOT NULL DEFAULT 1,
+      push_enabled TINYINT(1) NOT NULL DEFAULT 0,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      CONSTRAINT notification_preferences_user_foreign FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS reward_transactions (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      user_id BIGINT UNSIGNED NOT NULL,
+      source_type VARCHAR(60) NOT NULL,
+      source_id BIGINT UNSIGNED NOT NULL,
+      reward_type VARCHAR(40) NOT NULL,
+      amount INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY reward_transaction_source_unique (user_id, source_type, source_id, reward_type),
+      CONSTRAINT reward_transactions_user_foreign FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS guild_missions (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      guild_id BIGINT UNSIGNED NOT NULL,
+      creator_id BIGINT UNSIGNED NOT NULL,
+      title VARCHAR(180) NOT NULL,
+      detail VARCHAR(255) NULL,
+      difficulty ENUM('easy', 'medium', 'hard', 'epic') NOT NULL DEFAULT 'easy',
+      target_progress INT UNSIGNED NOT NULL DEFAULT 1,
+      current_progress INT UNSIGNED NOT NULL DEFAULT 0,
+      reward_xp INT UNSIGNED NOT NULL DEFAULT 25,
+      mission_date DATE NOT NULL,
+      status ENUM('active', 'completed', 'cancelled') NOT NULL DEFAULT 'active',
+      completed_at DATETIME NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX guild_missions_guild_status_index (guild_id, status),
+      CONSTRAINT guild_missions_guild_foreign FOREIGN KEY (guild_id) REFERENCES guilds(id) ON DELETE CASCADE,
+      CONSTRAINT guild_missions_creator_foreign FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS guild_mission_contributions (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      mission_id BIGINT UNSIGNED NOT NULL,
+      user_id BIGINT UNSIGNED NOT NULL,
+      amount INT UNSIGNED NOT NULL DEFAULT 1,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY guild_mission_user_unique (mission_id, user_id),
+      CONSTRAINT guild_mission_contributions_mission_foreign FOREIGN KEY (mission_id) REFERENCES guild_missions(id) ON DELETE CASCADE,
+      CONSTRAINT guild_mission_contributions_user_foreign FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS mission_contributions (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      mission_id BIGINT UNSIGNED NOT NULL,
+      user_id BIGINT UNSIGNED NOT NULL,
+      amount INT UNSIGNED NOT NULL DEFAULT 1,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY mission_contributions_mission_user_unique (mission_id, user_id),
+      CONSTRAINT mission_contributions_mission_foreign FOREIGN KEY (mission_id) REFERENCES missions(id) ON DELETE CASCADE,
+      CONSTRAINT mission_contributions_user_foreign FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
   `);
+
+  const [missionExtraColumns] = await connection.query(
+    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'missions'
+       AND COLUMN_NAME IN ('difficulty', 'duration_minutes', 'template_id', 'custom_source')`,
+    [env.database.name]
+  );
+  const extraNames = missionExtraColumns.map((column) => column.COLUMN_NAME);
+  if (!extraNames.includes('difficulty')) {
+    await connection.query("ALTER TABLE missions ADD COLUMN difficulty ENUM('easy', 'medium', 'hard', 'epic') NOT NULL DEFAULT 'easy' AFTER detail");
+  }
+  if (!extraNames.includes('duration_minutes')) {
+    await connection.query('ALTER TABLE missions ADD COLUMN duration_minutes INT UNSIGNED NOT NULL DEFAULT 15 AFTER difficulty');
+  }
+  if (!extraNames.includes('template_id')) {
+    await connection.query('ALTER TABLE missions ADD COLUMN template_id BIGINT UNSIGNED NULL AFTER user_id');
+  }
+  if (!extraNames.includes('custom_source')) {
+    await connection.query("ALTER TABLE missions ADD COLUMN custom_source TINYINT(1) NOT NULL DEFAULT 0 AFTER template_id");
+  }
+
+  const classSeeds = [
+    ['warrior', 'Warrior', 'Petarung yang unggul dalam kekuatan dan stamina.', 'strength', 3, 0, 0, 2, 0],
+    ['scholar', 'Scholar', 'Pembelajar yang unggul dalam kecerdasan dan pemecahan masalah.', 'intelligence', 0, 3, 1, 0, 1],
+    ['artisan', 'Artisan', 'Pencipta yang tekun, lincah, dan konsisten.', 'agility', 0, 1, 3, 1, 0],
+  ];
+  for (const seed of classSeeds) {
+    await connection.query(
+      `INSERT INTO player_classes
+       (name, label, description, primary_stat, strength_bonus, intelligence_bonus, agility_bonus, stamina_bonus, luck_bonus)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE label = VALUES(label), description = VALUES(description), primary_stat = VALUES(primary_stat),
+         strength_bonus = VALUES(strength_bonus), intelligence_bonus = VALUES(intelligence_bonus), agility_bonus = VALUES(agility_bonus),
+         stamina_bonus = VALUES(stamina_bonus), luck_bonus = VALUES(luck_bonus)`,
+      seed
+    );
+  }
+
+  const missionTemplates = [
+    ['Fokus kerja', 'Selesaikan satu pekerjaan penting tanpa distraksi.', 'personal', 'medium', 30, 50],
+    ['Latihan pagi', 'Bergerak aktif selama minimal 20 menit.', 'personal', 'easy', 20, 25],
+    ['Belajar skill baru', 'Luangkan waktu untuk belajar dan mencatat hal penting.', 'personal', 'medium', 25, 50],
+    ['Refleksi harian', 'Tulis jurnal singkat tentang progres hari ini.', 'personal', 'easy', 10, 25],
+  ];
+  for (const template of missionTemplates) {
+    await connection.query(
+      `INSERT INTO mission_templates (title, detail, category, difficulty, duration_minutes, reward_xp)
+       SELECT ?, ?, ?, ?, ?, ?
+       WHERE NOT EXISTS (SELECT 1 FROM mission_templates WHERE title = ? LIMIT 1)`,
+      [...template, template[0]]
+    );
+  }
+
+  await connection.query(
+    `INSERT INTO notification_preferences (user_id)
+     SELECT users.id FROM users
+     LEFT JOIN notification_preferences ON notification_preferences.user_id = users.id
+     WHERE notification_preferences.user_id IS NULL`
+  );
 
   const [missionColumns] = await connection.query(
     `SELECT COLUMN_NAME
      FROM INFORMATION_SCHEMA.COLUMNS
      WHERE TABLE_SCHEMA = ?
        AND TABLE_NAME = 'missions'
-       AND COLUMN_NAME IN ('mission_date', 'reward_type', 'reward_name', 'reward_key')`,
+       AND COLUMN_NAME IN ('category', 'mission_date', 'frequency', 'scheduled_time', 'reward_type', 'reward_name', 'reward_key', 'failed', 'failed_at')`,
     [env.database.name]
   );
   const missionColumnNames = missionColumns.map((column) => column.COLUMN_NAME);
+
+  if (!missionColumnNames.includes('category')) {
+    await connection.query(
+      "ALTER TABLE missions ADD COLUMN category ENUM('system', 'personal', 'guild') NOT NULL DEFAULT 'system' AFTER user_id"
+    );
+  }
+
+  const [sharedMissionColumns] = await connection.query(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ?
+       AND TABLE_NAME = 'missions'
+       AND COLUMN_NAME IN ('guild_id', 'target_progress', 'current_progress', 'status', 'legacy_guild_mission_id')`,
+    [env.database.name]
+  );
+  const sharedMissionColumnNames = sharedMissionColumns.map((column) => column.COLUMN_NAME);
+
+  if (!sharedMissionColumnNames.includes('guild_id')) {
+    await connection.query('ALTER TABLE missions ADD COLUMN guild_id BIGINT UNSIGNED NULL AFTER category');
+  }
+  if (!sharedMissionColumnNames.includes('target_progress')) {
+    await connection.query('ALTER TABLE missions ADD COLUMN target_progress INT UNSIGNED NOT NULL DEFAULT 1 AFTER guild_id');
+  }
+  if (!sharedMissionColumnNames.includes('current_progress')) {
+    await connection.query('ALTER TABLE missions ADD COLUMN current_progress INT UNSIGNED NOT NULL DEFAULT 0 AFTER target_progress');
+  }
+  if (!sharedMissionColumnNames.includes('status')) {
+    await connection.query("ALTER TABLE missions ADD COLUMN status ENUM('active', 'completed', 'cancelled') NOT NULL DEFAULT 'active' AFTER current_progress");
+  }
+  if (!sharedMissionColumnNames.includes('legacy_guild_mission_id')) {
+    await connection.query('ALTER TABLE missions ADD COLUMN legacy_guild_mission_id BIGINT UNSIGNED NULL AFTER status');
+  }
+
+  const [missionGuildIndexes] = await connection.query(
+    `SELECT DISTINCT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'missions' AND INDEX_NAME = 'missions_guild_status_index'`,
+    [env.database.name]
+  );
+  if (!missionGuildIndexes.length) {
+    await connection.query('ALTER TABLE missions ADD INDEX missions_guild_status_index (guild_id, status)');
+  }
+
+  const [missionGuildForeignKeys] = await connection.query(
+    `SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'missions' AND COLUMN_NAME = 'guild_id' AND REFERENCED_TABLE_NAME = 'guilds'`,
+    [env.database.name]
+  );
+  if (!missionGuildForeignKeys.length) {
+    await connection.query('ALTER TABLE missions ADD CONSTRAINT missions_guild_foreign FOREIGN KEY (guild_id) REFERENCES guilds(id) ON DELETE CASCADE');
+  }
 
   if (!missionColumnNames.includes('mission_date')) {
     await connection.query(
@@ -283,6 +668,18 @@ async function migrate() {
     );
     await connection.query(
       "ALTER TABLE missions MODIFY COLUMN mission_date DATE NOT NULL DEFAULT '1970-01-01'"
+    );
+  }
+
+  if (!missionColumnNames.includes('scheduled_time')) {
+    await connection.query(
+      'ALTER TABLE missions ADD COLUMN scheduled_time TIME NULL AFTER mission_date'
+    );
+  }
+
+  if (!missionColumnNames.includes('frequency')) {
+    await connection.query(
+      "ALTER TABLE missions ADD COLUMN frequency ENUM('daily', 'weekly', 'monthly') NOT NULL DEFAULT 'daily' AFTER mission_date"
     );
   }
 
@@ -305,6 +702,18 @@ async function migrate() {
     );
   }
 
+  if (!missionColumnNames.includes('failed')) {
+    await connection.query(
+      'ALTER TABLE missions ADD COLUMN failed TINYINT(1) NOT NULL DEFAULT 0 AFTER completed_at'
+    );
+  }
+
+  if (!missionColumnNames.includes('failed_at')) {
+    await connection.query(
+      'ALTER TABLE missions ADD COLUMN failed_at DATETIME NULL AFTER failed'
+    );
+  }
+
   const [missionIndexes] = await connection.query(
     `SELECT DISTINCT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS
      WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'missions'`,
@@ -314,11 +723,36 @@ async function migrate() {
   if (missionIndexNames.includes('missions_user_id_title_unique')) {
     await connection.query('ALTER TABLE missions DROP INDEX missions_user_id_title_unique');
   }
-  if (!missionIndexNames.includes('missions_user_id_title_date_unique')) {
+  if (missionIndexNames.includes('missions_user_id_title_date_unique')) {
+    await connection.query('ALTER TABLE missions DROP INDEX missions_user_id_title_date_unique');
+  }
+  if (!missionIndexNames.includes('missions_owner_scope_title_date_unique')) {
     await connection.query(
-      'ALTER TABLE missions ADD UNIQUE KEY missions_user_id_title_date_unique (user_id, title, mission_date)'
+      'ALTER TABLE missions ADD UNIQUE KEY missions_owner_scope_title_date_unique (user_id, category, guild_id, title, mission_date)'
     );
   }
+
+  await connection.query(
+    `INSERT IGNORE INTO missions
+       (user_id, category, guild_id, target_progress, current_progress, status, legacy_guild_mission_id,
+        mission_date, frequency, title, detail, difficulty, reward, reward_type, reward_name, reward_key, custom_source,
+        completed, completed_at)
+     SELECT guild_missions.creator_id, 'guild', guild_missions.guild_id,
+            guild_missions.target_progress, guild_missions.current_progress, guild_missions.status, guild_missions.id,
+            guild_missions.mission_date, 'daily', guild_missions.title, guild_missions.detail, guild_missions.difficulty,
+            guild_missions.reward_xp, 'xp', CONCAT(guild_missions.reward_xp, ' XP untuk kontribusi'), 'xp', 1,
+            IF(guild_missions.status = 'completed', 1, 0), guild_missions.completed_at
+     FROM guild_missions
+     LEFT JOIN missions ON missions.legacy_guild_mission_id = guild_missions.id
+     WHERE missions.id IS NULL`
+  );
+
+  await connection.query(
+    `INSERT IGNORE INTO mission_contributions (mission_id, user_id, amount)
+     SELECT missions.id, guild_mission_contributions.user_id, guild_mission_contributions.amount
+     FROM guild_mission_contributions
+     INNER JOIN missions ON missions.legacy_guild_mission_id = guild_mission_contributions.mission_id`
+  );
 
   for (const role of roles) {
     await connection.query(
@@ -412,6 +846,66 @@ async function migrate() {
     );
   }
 
+  const [affiliateColumns] = await connection.query(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ?
+       AND TABLE_NAME = 'users'
+       AND COLUMN_NAME IN ('affiliate_code', 'referred_by')`,
+    [env.database.name]
+  );
+  const affiliateColumnNames = affiliateColumns.map((column) => column.COLUMN_NAME);
+
+  if (!affiliateColumnNames.includes('affiliate_code')) {
+    await connection.query(
+      'ALTER TABLE users ADD COLUMN affiliate_code VARCHAR(32) NULL UNIQUE AFTER password'
+    );
+  }
+
+  if (!affiliateColumnNames.includes('referred_by')) {
+    await connection.query(
+      'ALTER TABLE users ADD COLUMN referred_by BIGINT UNSIGNED NULL AFTER affiliate_code'
+    );
+    await connection.query('ALTER TABLE users ADD INDEX users_referred_by_index (referred_by)');
+  }
+
+  const [affiliateConstraints] = await connection.query(
+    `SELECT CONSTRAINT_NAME
+     FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+     WHERE TABLE_SCHEMA = ?
+       AND TABLE_NAME = 'users'
+       AND COLUMN_NAME = 'referred_by'
+       AND REFERENCED_TABLE_NAME = 'users'`,
+    [env.database.name]
+  );
+
+  if (!affiliateConstraints.length) {
+    await connection.query(
+      `ALTER TABLE users
+       ADD CONSTRAINT users_referred_by_foreign
+       FOREIGN KEY (referred_by) REFERENCES users(id)
+       ON DELETE SET NULL`
+    );
+  }
+
+  await connection.query(
+    `UPDATE users
+     SET affiliate_code = CONCAT('AFF', LPAD(id, 6, '0'))
+     WHERE affiliate_code IS NULL`
+  );
+
+  await connection.query(
+    `UPDATE users
+     SET affiliate_code = REPLACE(affiliate_code, 'REF-', '')
+     WHERE affiliate_code LIKE 'REF-%'`
+  );
+
+  await connection.query(
+    `UPDATE affiliate_referrals
+     INNER JOIN users ON users.id = affiliate_referrals.affiliate_user_id
+     SET affiliate_referrals.referral_code = users.affiliate_code`
+  );
+
   await connection.query(
     `UPDATE users
      SET role_id = (SELECT id FROM roles WHERE name = 'staff' LIMIT 1)
@@ -442,16 +936,22 @@ async function migrate() {
      WHERE skills.name IN ('productivity', 'communication')`
   );
 
-  for (const mission of require('../constants/missions').missionSeeds) {
+  for (const mission of require('../constants/missions').allMissionSeeds) {
     await connection.query(
       `INSERT INTO missions
-         (user_id, mission_date, title, detail, reward, reward_type, reward_name, reward_key)
-       SELECT users.id, CURDATE(), ?, ?, ?, ?, ?, ? FROM users
+         (user_id, mission_date, frequency, scheduled_time, title, detail, reward, reward_type, reward_name, reward_key)
+       SELECT users.id,
+              CASE ?
+                WHEN 'daily' THEN CURDATE()
+                WHEN 'weekly' THEN DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)
+                ELSE DATE_FORMAT(CURDATE(), '%Y-%m-01')
+              END,
+              ?, ?, ?, ?, ?, ?, ?, ? FROM users
        ON DUPLICATE KEY UPDATE
-         detail = VALUES(detail), reward = VALUES(reward),
+         frequency = VALUES(frequency), scheduled_time = VALUES(scheduled_time), detail = VALUES(detail), reward = VALUES(reward),
          reward_type = VALUES(reward_type), reward_name = VALUES(reward_name),
          reward_key = VALUES(reward_key)`,
-      [mission.title, mission.detail, mission.reward, mission.reward_type, mission.reward_name, mission.reward_key]
+      [mission.frequency || 'daily', mission.frequency || 'daily', mission.scheduled_time, mission.title, mission.detail, mission.reward, mission.reward_type, mission.reward_name, mission.reward_key]
     );
   }
 

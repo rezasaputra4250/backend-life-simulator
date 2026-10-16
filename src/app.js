@@ -2,9 +2,16 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const mobileRoutes = require('./routes/mobileRoutes');
 const authRoutes = require('./routes/authRoutes');
 const missionRoutes = require('./routes/missionRoutes');
 const inventoryRoutes = require('./routes/inventoryRoutes');
+const todoRoutes = require('./routes/todoRoutes');
+const affiliateRoutes = require('./routes/affiliateRoutes');
+const friendRoutes = require('./routes/friendRoutes');
+const partyRoutes = require('./routes/partyRoutes');
+const guildRoutes = require('./routes/guildRoutes');
+const v1Routes = require('./routes/v1Routes');
 
 const app = express();
 
@@ -20,9 +27,19 @@ app.get('/', (req, res) => {
   });
 });
 
+// Current API channel: mobile. Feature modules are grouped behind this boundary.
+app.use('/api/mobile', mobileRoutes);
+app.use('/api/mobile/v1', v1Routes);
+
+// Backward-compatible aliases for existing mobile app builds.
 app.use('/api/auth', authRoutes);
 app.use('/api/missions', missionRoutes);
 app.use('/api/inventory', inventoryRoutes);
+app.use('/api/todos', todoRoutes);
+app.use('/api/affiliate', affiliateRoutes);
+app.use('/api/friends', friendRoutes);
+app.use('/api/parties', partyRoutes);
+app.use('/api/guilds', guildRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
