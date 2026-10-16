@@ -2,6 +2,7 @@
 
 ## Catatan Proyek
 
+- Gunakan Bahasa Indonesia untuk komunikasi, penjelasan perubahan, dan laporan hasil kepada pengguna. Pertahankan Bahasa Inggris hanya untuk identitas teknis yang memang digunakan oleh kode atau tooling.
 - Ini adalah proyek backend untuk aplikasi Express/Node.js.
 - Gunakan bahasa Inggris untuk implementasi dan identitas teknis, termasuk kode, nama variabel, nama file, nama route, field database, komentar, log, dan pesan commit.
 - Gunakan Bahasa Indonesia untuk konten yang terlihat oleh pengguna, termasuk pesan API, pesan validasi, teks respons, label, dan data tampilan awal.
