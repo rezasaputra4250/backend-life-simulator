@@ -73,12 +73,21 @@ async function search(req, res, next) {
                     AND friend_requests.status = 'pending'
                 ) THEN 'request_received'
                 ELSE 'none'
-              END AS relationship_status
+              END AS relationship_status,
+              (
+                SELECT friend_requests.id
+                FROM friend_requests
+                WHERE friend_requests.requester_id = users.id
+                  AND friend_requests.addressee_id = ?
+                  AND friend_requests.status = 'pending'
+                ORDER BY friend_requests.id DESC
+                LIMIT 1
+              ) AS incoming_request_id
        FROM users
        WHERE users.id <> ? AND (users.name LIKE ? OR users.email LIKE ?)
        ORDER BY users.name ASC
        LIMIT 20`,
-      [req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, searchValue, searchValue]
+      [req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, searchValue, searchValue]
     );
 
     return res.json({ message: 'Pengguna berhasil dicari.', users });
@@ -88,6 +97,7 @@ async function search(req, res, next) {
 }
 
 async function request(req, res, next) {
+  let connection;
   try {
     const errorResponse = validationErrorResponse(req, res);
     if (errorResponse) return errorResponse;
@@ -97,88 +107,123 @@ async function request(req, res, next) {
       return res.status(422).json({ message: 'Kamu tidak dapat menambahkan diri sendiri.' });
     }
 
-    const [users] = await pool.query('SELECT id FROM users WHERE id = ? LIMIT 1', [targetId]);
-    if (!users.length) return res.status(404).json({ message: 'Pengguna tidak ditemukan.' });
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [users] = await connection.query('SELECT id FROM users WHERE id = ? LIMIT 1 FOR UPDATE', [targetId]);
+    if (!users.length) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'Pengguna tidak ditemukan.' });
+    }
 
     const [userOneId, userTwoId] = pair(req.user.id, targetId);
-    const [friendships] = await pool.query(
+    const [friendships] = await connection.query(
       'SELECT id FROM friendships WHERE user_one_id = ? AND user_two_id = ? LIMIT 1',
       [userOneId, userTwoId]
     );
-    if (friendships.length) return res.status(409).json({ message: 'Kalian sudah berteman.' });
+    if (friendships.length) {
+      await connection.rollback();
+      return res.status(409).json({ message: 'Kalian sudah berteman.' });
+    }
 
-    const [existing] = await pool.query(
+    const [existing] = await connection.query(
       `SELECT id, requester_id, addressee_id, status
        FROM friend_requests
        WHERE (requester_id = ? AND addressee_id = ?)
           OR (requester_id = ? AND addressee_id = ?)
-       ORDER BY id DESC LIMIT 1`,
+       ORDER BY id DESC LIMIT 1 FOR UPDATE`,
       [req.user.id, targetId, targetId, req.user.id]
     );
 
+    if (existing.length && existing[0].status === 'accepted') {
+      await connection.query(
+        'INSERT IGNORE INTO friendships (user_one_id, user_two_id) VALUES (?, ?)',
+        [userOneId, userTwoId]
+      );
+      await connection.commit();
+      return res.json({ message: 'Kalian sekarang sudah berteman.', data: { user_id: targetId, status: 'friends' } });
+    }
+
     if (existing.length && existing[0].status === 'pending') {
-      if (existing[0].requester_id === targetId) {
-        await pool.query(
+      if (Number(existing[0].requester_id) === targetId) {
+        await connection.query(
           'UPDATE friend_requests SET status = \'accepted\' WHERE id = ?',
           [existing[0].id]
         );
-        await pool.query(
+        await connection.query(
           'INSERT IGNORE INTO friendships (user_one_id, user_two_id) VALUES (?, ?)',
           [userOneId, userTwoId]
         );
+        await connection.commit();
         return res.json({ message: 'Permintaan pertemanan diterima. Kalian sekarang berteman.', data: { user_id: targetId, status: 'friends' } });
       }
+      await connection.rollback();
       return res.status(409).json({ message: 'Permintaan pertemanan sudah dikirim.' });
     }
 
-    await pool.query(
+    await connection.query(
       `INSERT INTO friend_requests (requester_id, addressee_id, status)
        VALUES (?, ?, 'pending')
        ON DUPLICATE KEY UPDATE status = 'pending', updated_at = CURRENT_TIMESTAMP`,
       [req.user.id, targetId]
     );
-    await pool.query(
+    await connection.query(
       `INSERT INTO notifications (user_id, type, title, body, data)
        VALUES (?, 'friend_request', 'Permintaan pertemanan', ?, JSON_OBJECT('requester_id', ?))`,
       [targetId, `${req.user.name} ingin berteman denganmu.`, req.user.id]
     );
+    await connection.commit();
 
     return res.status(201).json({ message: 'Permintaan pertemanan berhasil dikirim.', data: { user_id: targetId, status: 'request_sent' } });
   } catch (error) {
+    if (connection) await connection.rollback();
     return next(error);
+  } finally {
+    if (connection) connection.release();
   }
 }
 
 async function respond(req, res, next) {
+  let connection;
   try {
     const errorResponse = validationErrorResponse(req, res);
     if (errorResponse) return errorResponse;
 
     const { action } = req.body;
-    const [requests] = await pool.query(
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    const [requests] = await connection.query(
       `SELECT id, requester_id, addressee_id
        FROM friend_requests
        WHERE id = ? AND addressee_id = ? AND status = 'pending'
        LIMIT 1`,
       [req.params.id, req.user.id]
     );
-    if (!requests.length) return res.status(404).json({ message: 'Permintaan pertemanan tidak ditemukan.' });
+    if (!requests.length) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'Permintaan pertemanan tidak ditemukan.' });
+    }
 
     const friendRequest = requests[0];
     if (action === 'accept') {
       const [userOneId, userTwoId] = pair(friendRequest.requester_id, friendRequest.addressee_id);
-      await pool.query('UPDATE friend_requests SET status = \'accepted\' WHERE id = ?', [friendRequest.id]);
-      await pool.query(
+      await connection.query('UPDATE friend_requests SET status = \'accepted\' WHERE id = ?', [friendRequest.id]);
+      await connection.query(
         'INSERT IGNORE INTO friendships (user_one_id, user_two_id) VALUES (?, ?)',
         [userOneId, userTwoId]
       );
+      await connection.commit();
       return res.json({ message: 'Permintaan pertemanan diterima.' });
     }
 
-    await pool.query('UPDATE friend_requests SET status = \'rejected\' WHERE id = ?', [friendRequest.id]);
+    await connection.query('UPDATE friend_requests SET status = \'rejected\' WHERE id = ?', [friendRequest.id]);
+    await connection.commit();
     return res.json({ message: 'Permintaan pertemanan ditolak.' });
   } catch (error) {
+    if (connection) await connection.rollback();
     return next(error);
+  } finally {
+    if (connection) connection.release();
   }
 }
 
