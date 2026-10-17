@@ -126,7 +126,7 @@ async function register(req, res, next) {
 
     const {
       name, email, password, role, company_id, referral_code,
-      birth_date, gender, phone, address, city, province,
+      birth_date, gender, phone, address,
     } = req.body;
     const [existingUsers] = await pool.query(
       'SELECT id FROM users WHERE email = ? AND deleted_at IS NULL LIMIT 1',
@@ -212,9 +212,9 @@ async function register(req, res, next) {
       result.insertId,
     ]);
     await pool.query(
-      `INSERT INTO user_profiles (user_id, birth_date, gender, phone, address, city, province)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [result.insertId, birth_date || null, gender || null, phone || null, address || null, city || null, province || null]
+      `INSERT INTO user_profiles (user_id, birth_date, gender, phone, address)
+       VALUES (?, ?, ?, ?, ?)`,
+      [result.insertId, birth_date || null, gender || null, phone || null, address || null]
     );
     await pool.query('INSERT INTO notification_preferences (user_id) VALUES (?)', [
       result.insertId,

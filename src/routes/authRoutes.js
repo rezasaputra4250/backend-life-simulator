@@ -32,16 +32,6 @@ router.post(
       .trim()
       .isLength({ max: 500 })
       .withMessage('Alamat terlalu panjang.'),
-    body('city')
-      .optional({ nullable: true })
-      .trim()
-      .isLength({ max: 120 })
-      .withMessage('Kota terlalu panjang.'),
-    body('province')
-      .optional({ nullable: true })
-      .trim()
-      .isLength({ max: 120 })
-      .withMessage('Provinsi terlalu panjang.'),
     body('role')
       .optional()
       .isIn(roleNames)
