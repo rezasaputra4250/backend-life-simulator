@@ -7,6 +7,7 @@
     "start": "node index.js",
     "migrate": "node src/database/migrate.js",
     "seed:missions": "node src/database/seedMissions.js",
+    "seed:kingdom-guilds": "node src/database/seedKingdomGuilds.js",
     "seed:muslim-habits": "node src/database/seedMuslimHabits.js",
     "test": "node --test"
   },
