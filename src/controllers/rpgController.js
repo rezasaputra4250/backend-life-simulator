@@ -17,7 +17,7 @@ async function classes(req, res, next) {
     const [rows] = await pool.query(
       `SELECT id, name, label, description, primary_stat, strength_bonus, intelligence_bonus,
               agility_bonus, stamina_bonus, luck_bonus
-       FROM player_classes WHERE is_active = 1 ORDER BY id`
+       FROM player_classes WHERE is_active = 1 AND deleted_at IS NULL ORDER BY id`
     );
     res.json({ message: 'Daftar class berhasil diambil.', data: rows });
   } catch (error) { next(error); }
@@ -26,13 +26,13 @@ async function classes(req, res, next) {
 async function selectClass(req, res, next) {
   try {
     if (invalid(req, res)) return;
-    const [classes] = await pool.query('SELECT * FROM player_classes WHERE id = ? AND is_active = 1 LIMIT 1', [req.body.class_id]);
+    const [classes] = await pool.query('SELECT * FROM player_classes WHERE id = ? AND is_active = 1 AND deleted_at IS NULL LIMIT 1', [req.body.class_id]);
     if (!classes.length) return res.status(404).json({ message: 'Class tidak ditemukan.' });
     const chosen = classes[0];
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction();
-      const [existing] = await connection.query('SELECT user_id FROM user_classes WHERE user_id = ? LIMIT 1 FOR UPDATE', [req.user.id]);
+      const [existing] = await connection.query('SELECT user_id FROM user_classes WHERE user_id = ? AND deleted_at IS NULL LIMIT 1 FOR UPDATE', [req.user.id]);
       if (existing.length) {
         await connection.rollback();
         return res.status(409).json({ message: 'Class karakter sudah dipilih.' });

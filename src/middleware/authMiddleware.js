@@ -62,7 +62,7 @@ async function authenticate(req, res, next) {
               user_skills.experience_to_next_level, user_skills.unlocked_at
        FROM user_skills
        INNER JOIN skills ON skills.id = user_skills.skill_id
-       WHERE user_skills.user_id = ?
+       WHERE user_skills.user_id = ? AND user_skills.deleted_at IS NULL AND skills.deleted_at IS NULL
        ORDER BY skills.label ASC`,
       [users[0].id]
     );

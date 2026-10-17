@@ -74,16 +74,17 @@ async function getProgression(userId) {
             classes.strength_bonus, classes.intelligence_bonus, classes.agility_bonus,
             classes.stamina_bonus, classes.luck_bonus
      FROM user_stats stats
-     LEFT JOIN user_classes ON user_classes.user_id = stats.user_id
-     LEFT JOIN player_classes classes ON classes.id = user_classes.class_id
-     WHERE stats.user_id = ? LIMIT 1`,
+     LEFT JOIN user_classes ON user_classes.user_id = stats.user_id AND user_classes.deleted_at IS NULL
+     LEFT JOIN player_classes classes ON classes.id = user_classes.class_id AND classes.deleted_at IS NULL
+     WHERE stats.user_id = ? AND stats.deleted_at IS NULL LIMIT 1`,
     [userId]
   );
   const [skills] = await pool.query(
     `SELECT skills.name, skills.label, skills.description, user_skills.level, user_skills.experience,
             user_skills.experience_to_next_level
      FROM user_skills INNER JOIN skills ON skills.id = user_skills.skill_id
-     WHERE user_skills.user_id = ? ORDER BY skills.label`,
+     WHERE user_skills.user_id = ? AND user_skills.deleted_at IS NULL AND skills.deleted_at IS NULL
+     ORDER BY skills.label`,
     [userId]
   );
   return { character: rows[0] || null, skills };
