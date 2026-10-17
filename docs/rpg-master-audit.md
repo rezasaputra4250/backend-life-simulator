@@ -31,6 +31,8 @@ Dokumen ini mencatat status implementasi backend terhadap master prompt. Audit d
 - `personal_missions` menyimpan Personal Mission per user.
 - `guild_missions` menyimpan Guild Mission dan memiliki `legacy_mission_id` untuk projection kompatibilitas.
 - `missions` masih dipertahankan sebagai projection legacy selama endpoint existing dimigrasikan secara bertahap.
+- Read path mission aktif sudah memakai domain table dan mempertahankan `legacy_mission_id` sebagai ID API kompatibilitas.
+- Create Personal dan Guild Mission memakai transaksi yang mencakup projection serta domain record.
 
 ## Catatan balancing
 
