@@ -3,7 +3,7 @@ const { validationResult } = require('express-validator');
 const { allMissionSeeds } = require('../constants/missions');
 const { itemCatalog, badgeCatalog } = require('../constants/rewards');
 const { skills } = require('../constants/skills');
-const { grantExperience } = require('../services/progressionService');
+const { recordMissionReward } = require('../services/rewardService');
 
 async function ensureCurrentMissions(userId, connection = pool) {
   const [userRows] = await connection.query('SELECT difficulty FROM users WHERE id = ? LIMIT 1', [userId]);
@@ -285,37 +285,11 @@ async function toggle(req, res, next) {
       );
 
       if (isCompleting) {
-        const [rewardResult] = await connection.query(
-          `INSERT INTO user_rewards
-             (user_id, mission_id, reward_type, reward_name, amount)
-           VALUES (?, ?, ?, ?, ?)
-           ON DUPLICATE KEY UPDATE deleted_at = NULL, amount = VALUES(amount)`,
-          [
-            req.user.id,
-            currentMission.id,
-            currentMission.reward_type,
-            currentMission.reward_name || `${currentMission.reward} XP`,
-            currentMission.reward_type === 'xp' ? currentMission.reward : 1,
-          ]
-        );
-
-        if (rewardResult.affectedRows) {
-          if (currentMission.reward_type === 'xp') {
-            await grantExperience(
-              connection,
-              req.user.id,
-              currentMission.reward,
-              'mission',
-              currentMission.title,
-              { sourceId: currentMission.id, idempotencyKey: `mission:${currentMission.id}:xp` }
-            );
-          }
-        }
-
-        rewardGranted = Boolean(rewardResult.affectedRows);
+        const reward = await recordMissionReward(connection, req.user.id, currentMission);
+        rewardGranted = reward.granted;
         if (rewardGranted) grantedReward = getRewardDetails(currentMission);
 
-        if (rewardResult.affectedRows && currentMission.reward_type === 'skill') {
+        if (rewardGranted && currentMission.reward_type === 'skill') {
           await connection.query(
             `INSERT IGNORE INTO user_skills (user_id, skill_id)
              SELECT ?, id FROM skills WHERE name = ? LIMIT 1`,
@@ -339,7 +313,7 @@ async function toggle(req, res, next) {
           );
         }
 
-        if (rewardResult.affectedRows && currentMission.reward_type === 'item') {
+        if (rewardGranted && currentMission.reward_type === 'item') {
           const item = itemCatalog[currentMission.reward_key] || {
             name: currentMission.reward_name,
             description: 'Item hadiah dari quest guild.',
@@ -354,7 +328,7 @@ async function toggle(req, res, next) {
           );
         }
 
-        if (rewardResult.affectedRows && currentMission.reward_type === 'badge') {
+        if (rewardGranted && currentMission.reward_type === 'badge') {
           const badge = badgeCatalog[currentMission.reward_key] || {
             name: currentMission.reward_name,
             description: 'Badge pencapaian dari quest guild.',

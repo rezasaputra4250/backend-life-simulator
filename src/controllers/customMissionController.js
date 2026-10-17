@@ -1,6 +1,6 @@
 const { validationResult } = require('express-validator');
 const pool = require('../config/database');
-const { grantExperience } = require('../services/progressionService');
+const { recordMissionReward } = require('../services/rewardService');
 
 const allowedDifficulties = ['easy', 'normal', 'hard', 'expert'];
 function invalid(req, res) {
@@ -50,29 +50,12 @@ async function complete(req, res, next) {
     const mission = missions[0];
     if (mission.completed) { await connection.rollback(); return res.status(409).json({ message: 'Misi sudah selesai.' }); }
     if (mission.failed) { await connection.rollback(); return res.status(409).json({ message: 'Misi sudah gagal.' }); }
-    const [reward] = await connection.query(
-      `INSERT INTO user_rewards (user_id, mission_id, reward_type, reward_name, amount)
-       VALUES (?, ?, 'xp', ?, ?)
-       ON DUPLICATE KEY UPDATE deleted_at = NULL, amount = VALUES(amount)`,
-      [req.user.id, mission.id, mission.reward_name || `${mission.reward} XP`, mission.reward]
-    );
-    if (reward.affectedRows) {
-      await connection.query(
-        `INSERT IGNORE INTO reward_transactions (user_id, source_type, source_id, reward_type, amount)
-         VALUES (?, 'mission', ?, 'xp', ?)`,
-        [req.user.id, mission.id, mission.reward]
-      );
-    }
+    const reward = await recordMissionReward(connection, req.user.id, mission);
     await connection.query('UPDATE missions SET completed = 1, completed_at = NOW() WHERE id = ?', [mission.id]);
-    const progression = reward.affectedRows
-      ? await grantExperience(connection, req.user.id, mission.reward, 'mission', mission.title, {
-        sourceId: mission.id,
-        idempotencyKey: `mission:${mission.id}:xp`,
-      })
-      : { amount: 0, levelUp: false };
+    const progression = reward.progression;
     await connection.query('INSERT INTO notifications (user_id, type, title, body) VALUES (?, \'reward\', \'Misi selesai\', ?)', [req.user.id, `Kamu mendapatkan ${mission.reward} XP dari misi: ${mission.title}.`]);
     await connection.commit();
-    res.json({ message: 'Misi berhasil diselesaikan.', data: { mission_id: mission.id, reward_granted: Boolean(reward.affectedRows), xp: progression.amount, level_up: progression.levelUp } });
+    res.json({ message: 'Misi berhasil diselesaikan.', data: { mission_id: mission.id, reward_granted: reward.granted, xp: progression.amount, level_up: progression.levelUp } });
   } catch (error) { await connection.rollback(); next(error); } finally { connection.release(); }
 }
 
