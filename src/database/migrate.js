@@ -5,6 +5,24 @@ const env = require('../config/env');
 const { roles } = require('../constants/roles');
 const { skills } = require('../constants/skills');
 
+function experienceForLevel(level) {
+  let requirement = 100;
+  for (let currentLevel = 1; currentLevel < Math.max(1, Number(level) || 1); currentLevel += 1) {
+    requirement = Math.round(requirement * 1.5);
+  }
+  return requirement;
+}
+
+function levelForExperience(totalExperience) {
+  let level = 1;
+  let remaining = Math.max(0, Number(totalExperience) || 0);
+  while (remaining >= experienceForLevel(level)) {
+    remaining -= experienceForLevel(level);
+    level += 1;
+  }
+  return level;
+}
+
 async function migrate() {
   const connection = await mysql.createConnection({
     host: env.database.host,
@@ -625,12 +643,14 @@ async function migrate() {
     await connection.query(
       "ALTER TABLE users ADD COLUMN difficulty ENUM('easy', 'normal', 'hard', 'expert') NOT NULL DEFAULT 'easy'"
     );
-  } else if (userDifficultyColumns[0].COLUMN_TYPE.includes("'medium'")) {
+  } else {
     await connection.query("UPDATE users SET difficulty = 'normal' WHERE difficulty = 'medium'");
     await connection.query("UPDATE users SET difficulty = 'expert' WHERE difficulty = 'epic'");
-    await connection.query(
-      "ALTER TABLE users MODIFY COLUMN difficulty ENUM('easy', 'normal', 'hard', 'expert') NOT NULL DEFAULT 'easy'"
-    );
+    if (userDifficultyColumns[0].COLUMN_TYPE !== "enum('easy','normal','hard','expert')") {
+      await connection.query(
+        "ALTER TABLE users MODIFY COLUMN difficulty ENUM('easy', 'normal', 'hard', 'expert') NOT NULL DEFAULT 'easy'"
+      );
+    }
   }
 
   const difficultyTables = ['missions', 'mission_templates', 'guild_missions'];
@@ -640,12 +660,14 @@ async function migrate() {
        WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = 'difficulty'`,
       [env.database.name, tableName]
     );
-    if (difficultyColumns.length && difficultyColumns[0].COLUMN_TYPE.includes("'medium'")) {
+    if (difficultyColumns.length) {
       await connection.query(`UPDATE \`${tableName}\` SET difficulty = 'normal' WHERE difficulty = 'medium'`);
       await connection.query(`UPDATE \`${tableName}\` SET difficulty = 'expert' WHERE difficulty = 'epic'`);
-      await connection.query(
-        `ALTER TABLE \`${tableName}\` MODIFY COLUMN difficulty ENUM('easy', 'normal', 'hard', 'expert') NOT NULL DEFAULT 'easy'`
-      );
+      if (difficultyColumns[0].COLUMN_TYPE !== "enum('easy','normal','hard','expert')") {
+        await connection.query(
+          `ALTER TABLE \`${tableName}\` MODIFY COLUMN difficulty ENUM('easy', 'normal', 'hard', 'expert') NOT NULL DEFAULT 'easy'`
+        );
+      }
     }
   }
 
@@ -1053,6 +1075,19 @@ async function migrate() {
      LEFT JOIN user_stats ON user_stats.user_id = users.id
      WHERE user_stats.id IS NULL`
   );
+
+  const [existingStats] = await connection.query(
+    'SELECT user_id, experience FROM user_stats'
+  );
+  for (const stats of existingStats) {
+    const level = levelForExperience(stats.experience);
+    await connection.query(
+      `UPDATE user_stats
+       SET level = ?, experience_to_next_level = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = ?`,
+      [level, experienceForLevel(level), stats.user_id]
+    );
+  }
 
   await connection.query(
     `INSERT INTO user_profiles (user_id)
