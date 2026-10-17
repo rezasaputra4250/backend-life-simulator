@@ -68,4 +68,41 @@ async function leaderboard(req, res, next) {
   } catch (error) { next(error); }
 }
 
-module.exports = { classes, selectClass, progression, leaderboard };
+async function difficultyConfigs(req, res, next) {
+  try {
+    const [rows] = await pool.query(
+      `SELECT difficulty, base_reward_xp
+       FROM difficulty_configs
+       WHERE is_active = 1 AND deleted_at IS NULL
+       ORDER BY FIELD(difficulty, 'easy', 'normal', 'hard', 'expert')`
+    );
+    res.json({ message: 'Konfigurasi difficulty berhasil diambil.', data: rows });
+  } catch (error) { next(error); }
+}
+
+async function updateDifficulty(req, res, next) {
+  try {
+    if (invalid(req, res)) return;
+    const [result] = await pool.query(
+      'UPDATE users SET difficulty = ? WHERE id = ? AND deleted_at IS NULL',
+      [req.body.difficulty, req.user.id]
+    );
+    if (!result.affectedRows) return res.status(404).json({ message: 'Pengguna tidak ditemukan.' });
+    res.json({ message: 'Difficulty berhasil diperbarui. Misi lama tidak berubah.', data: { difficulty: req.body.difficulty } });
+  } catch (error) { next(error); }
+}
+
+async function experienceHistory(req, res, next) {
+  try {
+    const [rows] = await pool.query(
+      `SELECT id, source_type, source_id, amount, reason, created_at
+       FROM experience_transactions
+       WHERE user_id = ? AND deleted_at IS NULL
+       ORDER BY id DESC LIMIT 100`,
+      [req.user.id]
+    );
+    res.json({ message: 'Riwayat EXP berhasil diambil.', data: rows });
+  } catch (error) { next(error); }
+}
+
+module.exports = { classes, selectClass, progression, leaderboard, difficultyConfigs, updateDifficulty, experienceHistory };

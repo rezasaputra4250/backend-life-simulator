@@ -19,7 +19,8 @@ async function list(req, res, next) {
               COUNT(guild_members.id) AS member_count
        FROM guilds
        INNER JOIN guild_members ON guild_members.guild_id = guilds.id
-       WHERE guild_members.user_id = ?
+       WHERE guilds.deleted_at IS NULL AND guild_members.deleted_at IS NULL
+         AND guild_members.user_id = ?
        GROUP BY guilds.id
        ORDER BY guilds.updated_at DESC`,
       [req.user.id]
@@ -28,8 +29,9 @@ async function list(req, res, next) {
       `SELECT guild_members.guild_id, users.id, users.name, users.email, guild_members.role
        FROM guild_members
        INNER JOIN users ON users.id = guild_members.user_id
-       WHERE guild_members.guild_id IN (
-         SELECT guild_id FROM guild_members WHERE user_id = ?
+       WHERE guild_members.deleted_at IS NULL AND users.deleted_at IS NULL
+         AND guild_members.guild_id IN (
+         SELECT guild_id FROM guild_members WHERE user_id = ? AND deleted_at IS NULL
        )
        ORDER BY users.name ASC`,
       [req.user.id]
@@ -40,7 +42,8 @@ async function list(req, res, next) {
        FROM guild_invitations
        INNER JOIN guilds ON guilds.id = guild_invitations.guild_id
        INNER JOIN users ON users.id = guild_invitations.inviter_id
-       WHERE guild_invitations.invitee_id = ? AND guild_invitations.status = 'pending'
+       WHERE guild_invitations.deleted_at IS NULL AND guilds.deleted_at IS NULL
+         AND guild_invitations.invitee_id = ? AND guild_invitations.status = 'pending'
        ORDER BY guild_invitations.created_at DESC`,
       [req.user.id]
     );
@@ -52,8 +55,8 @@ async function list(req, res, next) {
               missions.scheduled_time,
               missions.status, missions.completed_at
        FROM missions
-       WHERE missions.category = 'guild'
-         AND missions.guild_id IN (SELECT guild_id FROM guild_members WHERE user_id = ?)
+       WHERE missions.deleted_at IS NULL AND missions.category = 'guild'
+         AND missions.guild_id IN (SELECT guild_id FROM guild_members WHERE user_id = ? AND deleted_at IS NULL)
          AND missions.status = 'active'
        ORDER BY missions.mission_date ASC, missions.id DESC`,
       [req.user.id]
@@ -83,20 +86,21 @@ async function createMission(req, res, next) {
     );
     if (!guilds.length) return res.status(404).json({ message: 'Guild tidak ditemukan atau kamu bukan pemiliknya.' });
 
-    const rewardByDifficulty = { easy: 25, medium: 50, hard: 100, epic: 200 };
-    const difficulty = req.body.difficulty || 'easy';
-    const rewardXp = Math.min(
-      rewardByDifficulty[difficulty],
-      Math.max(1, Number(req.body.reward_xp) || rewardByDifficulty[difficulty])
+    const difficulty = ['easy', 'normal', 'hard', 'expert'].includes(req.body.difficulty) ? req.body.difficulty : 'easy';
+    const [difficultyRows] = await pool.query(
+      'SELECT base_reward_xp FROM difficulty_configs WHERE difficulty = ? AND is_active = 1 AND deleted_at IS NULL LIMIT 1',
+      [difficulty]
     );
+    const rewardXp = Number(difficultyRows[0]?.base_reward_xp || 5);
+    const grantPlayerExperience = req.body.grant_player_experience === true;
     const [result] = await pool.query(
       `INSERT INTO missions
        (user_id, category, guild_id, mission_date, frequency, scheduled_time, title, detail, difficulty,
-        target_progress, current_progress, status, reward, reward_type, reward_name, reward_key, custom_source)
-       VALUES (?, 'guild', ?, ?, 'daily', ?, ?, ?, ?, ?, 0, 'active', ?, 'xp', ?, 'xp', 1)`,
+        target_progress, current_progress, status, reward, reward_type, reward_name, reward_key, custom_source, grant_player_experience)
+       VALUES (?, 'guild', ?, ?, 'daily', ?, ?, ?, ?, ?, 0, 'active', ?, 'xp', ?, 'xp', 1, ?)`,
       [req.user.id, req.params.id, req.body.mission_date, req.body.scheduled_time || null, req.body.title, req.body.detail || null, difficulty,
         req.body.target_progress || 1, rewardXp,
-        `${rewardXp} XP untuk kontribusi`]
+        `${rewardXp} XP untuk kontribusi`, grantPlayerExperience]
     );
     await pool.query(
       `INSERT INTO notifications (user_id, type, title, body, data)
@@ -124,6 +128,7 @@ async function contributeMission(req, res, next) {
       `SELECT missions.* FROM missions
        INNER JOIN guild_members ON guild_members.guild_id = missions.guild_id
        WHERE missions.id = ? AND missions.guild_id = ? AND missions.category = 'guild'
+         AND missions.deleted_at IS NULL AND guild_members.deleted_at IS NULL
          AND guild_members.user_id = ? AND missions.status = 'active'
        LIMIT 1 FOR UPDATE`,
       [req.params.missionId, req.params.guildId, req.user.id]
@@ -152,7 +157,12 @@ async function contributeMission(req, res, next) {
        VALUES (?, 'guild_mission_contribution', ?, 'xp', ?)`,
       [req.user.id, mission.id, reward]
     );
-    if (rewardTransaction.affectedRows) await grantExperience(connection, req.user.id, reward, 'guild_mission', mission.title);
+    if (rewardTransaction.affectedRows && mission.grant_player_experience) {
+      await grantExperience(connection, req.user.id, reward, 'guild_mission', mission.title, {
+        sourceId: mission.id,
+        idempotencyKey: `guild_mission:${mission.id}:user:${req.user.id}`,
+      });
+    }
     await connection.query(
       `INSERT INTO notifications (user_id, type, title, body, data)
        SELECT guild_members.user_id, 'guild_mission_progress', 'Progress misi guild', ?, JSON_OBJECT('mission_id', ?)

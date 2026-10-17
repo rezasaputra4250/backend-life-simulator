@@ -1,12 +1,32 @@
 const pool = require('../config/database');
 
 function experienceForLevel(level) {
-  return Math.max(100, Number(level) * 100);
+  return Math.max(100, Math.round(100 * (1.5 ** Math.max(0, Number(level) - 1))));
 }
 
-async function grantExperience(connection, userId, amount, source, description) {
-  const safeAmount = Math.max(0, Math.min(Number(amount) || 0, 1000));
+function levelForExperience(totalExperience) {
+  let level = 1;
+  let remaining = Math.max(0, Number(totalExperience) || 0);
+  while (remaining >= experienceForLevel(level)) {
+    remaining -= experienceForLevel(level);
+    level += 1;
+  }
+  return level;
+}
+
+async function grantExperience(connection, userId, amount, source, description, options = {}) {
+  const safeAmount = Math.max(-1000000, Math.min(Number(amount) || 0, 1000000));
   if (!safeAmount) return { amount: 0, levelUp: false };
+
+  const sourceId = options.sourceId ?? null;
+  const idempotencyKey = options.idempotencyKey || `${source}:${userId}:${sourceId ?? description ?? 'manual'}`;
+  const [ledgerResult] = await connection.query(
+    `INSERT IGNORE INTO experience_transactions
+       (user_id, source_type, source_id, amount, reason, idempotency_key)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [userId, source, sourceId, safeAmount, description || null, idempotencyKey]
+  );
+  if (!ledgerResult.affectedRows) return { amount: 0, levelUp: false, duplicate: true };
 
   const [beforeRows] = await connection.query(
     'SELECT level, experience FROM user_stats WHERE user_id = ? LIMIT 1 FOR UPDATE',
@@ -15,8 +35,8 @@ async function grantExperience(connection, userId, amount, source, description) 
   if (!beforeRows.length) return { amount: 0, levelUp: false };
 
   const before = beforeRows[0];
-  const nextExperience = Number(before.experience) + safeAmount;
-  const nextLevel = Math.floor(nextExperience / 100) + 1;
+  const nextExperience = Math.max(0, Number(before.experience) + safeAmount);
+  const nextLevel = levelForExperience(nextExperience);
   await connection.query(
     `UPDATE user_stats SET level = ?, experience = ?, experience_to_next_level = ?, updated_at = CURRENT_TIMESTAMP
      WHERE user_id = ?`,
@@ -60,4 +80,4 @@ async function getProgression(userId) {
   return { character: rows[0] || null, skills };
 }
 
-module.exports = { grantExperience, getProgression, experienceForLevel };
+module.exports = { grantExperience, getProgression, experienceForLevel, levelForExperience };

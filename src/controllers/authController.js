@@ -14,6 +14,7 @@ function formatUser(user) {
     email: user.email,
     affiliate_code: user.affiliate_code,
     referred_by: user.referred_by,
+    difficulty: user.difficulty || 'easy',
     role: {
       id: user.role_id,
       name: user.role_name,
@@ -282,7 +283,7 @@ async function login(req, res, next) {
     const { email, password } = req.body;
     const [users] = await pool.query(
       `SELECT users.id, users.name, users.email, users.password,
-              users.affiliate_code, users.referred_by,
+              users.affiliate_code, users.referred_by, users.difficulty,
               roles.id AS role_id, roles.name AS role_name, roles.label AS role_label,
               companies.id AS company_id, companies.name AS company_name,
               companies.legal_name AS company_legal_name, companies.code AS company_code,
@@ -299,7 +300,7 @@ async function login(req, res, next) {
        LEFT JOIN companies ON companies.id = users.company_id
        LEFT JOIN user_profiles ON user_profiles.user_id = users.id
        LEFT JOIN user_stats ON user_stats.user_id = users.id
-       WHERE users.email = ?
+       WHERE users.email = ? AND users.deleted_at IS NULL
        LIMIT 1`,
       [email]
     );

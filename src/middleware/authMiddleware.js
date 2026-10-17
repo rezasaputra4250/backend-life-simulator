@@ -15,7 +15,7 @@ async function authenticate(req, res, next) {
 
     const payload = jwt.verify(token, env.jwt.secret);
     const [users] = await pool.query(
-      `SELECT users.id, users.name, users.email, users.affiliate_code, users.referred_by,
+      `SELECT users.id, users.name, users.email, users.affiliate_code, users.referred_by, users.difficulty,
               users.created_at, users.updated_at,
               roles.id AS role_id, roles.name AS role_name, roles.label AS role_label,
               companies.id AS company_id, companies.name AS company_name,
@@ -33,7 +33,7 @@ async function authenticate(req, res, next) {
        LEFT JOIN companies ON companies.id = users.company_id
        LEFT JOIN user_profiles ON user_profiles.user_id = users.id
        LEFT JOIN user_stats ON user_stats.user_id = users.id
-       WHERE users.id = ?
+       WHERE users.id = ? AND users.deleted_at IS NULL
        LIMIT 1`,
       [payload.sub]
     );
@@ -113,6 +113,7 @@ async function authenticate(req, res, next) {
         stamina: users[0].stamina,
         luck: users[0].luck,
       },
+      difficulty: users[0].difficulty,
       skills,
       created_at: users[0].created_at,
       updated_at: users[0].updated_at,

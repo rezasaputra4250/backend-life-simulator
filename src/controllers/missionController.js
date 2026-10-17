@@ -3,13 +3,16 @@ const { validationResult } = require('express-validator');
 const { allMissionSeeds } = require('../constants/missions');
 const { itemCatalog, badgeCatalog } = require('../constants/rewards');
 const { skills } = require('../constants/skills');
+const { grantExperience } = require('../services/progressionService');
 
 async function ensureCurrentMissions(userId, connection = pool) {
+  const [userRows] = await connection.query('SELECT difficulty FROM users WHERE id = ? LIMIT 1', [userId]);
+  const difficulty = userRows[0]?.difficulty || 'easy';
   for (const mission of allMissionSeeds) {
     await connection.query(
       `INSERT INTO missions
-         (user_id, mission_date, frequency, scheduled_time, title, detail, reward, reward_type, reward_name, reward_key)
-       VALUES (?, CASE ?
+         (user_id, difficulty, mission_date, frequency, scheduled_time, title, detail, reward, reward_type, reward_name, reward_key)
+       VALUES (?, ?, CASE ?
          WHEN 'daily' THEN CURDATE()
          WHEN 'weekly' THEN DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)
          ELSE DATE_FORMAT(CURDATE(), '%Y-%m-01')
@@ -20,6 +23,7 @@ async function ensureCurrentMissions(userId, connection = pool) {
          reward_key = VALUES(reward_key)`,
       [
         userId,
+        difficulty,
         mission.frequency || 'daily',
         mission.frequency || 'daily',
         mission.scheduled_time,
@@ -57,6 +61,7 @@ function getRewardDetails(mission) {
 function formatMission(mission) {
   return {
     ...mission,
+    source: mission.category,
     ...(mission.category === 'guild' ? {
       guild_mission_id: Number(mission.id),
       guild_progress: {
@@ -133,7 +138,7 @@ async function getDailyStreak(userId) {
             SUM(completed = 1) AS completed_missions,
             SUM(failed = 1) AS failed_missions
      FROM missions
-     WHERE user_id = ? AND category <> 'guild' AND frequency = 'daily' AND mission_date <= CURDATE()
+     WHERE user_id = ? AND deleted_at IS NULL AND category <> 'guild' AND frequency = 'daily' AND mission_date <= CURDATE()
      GROUP BY mission_date
      ORDER BY mission_date DESC`,
     [userId]
@@ -167,6 +172,7 @@ async function markExpiredMissions(userId, connection = pool) {
        AND completed = 0
        AND failed = 0
        AND scheduled_time IS NOT NULL
+       AND deleted_at IS NULL
        AND scheduled_time < CURTIME()`,
     [userId]
   );
@@ -178,7 +184,7 @@ async function list(req, res, next) {
     await markExpiredMissions(req.user.id);
     const [missions] = await pool.query(
       `SELECT missions.id, missions.category, missions.guild_id,
-              missions.target_progress, missions.current_progress, missions.status,
+              missions.target_progress, missions.current_progress, missions.status, missions.difficulty,
               DATE_FORMAT(missions.mission_date, '%Y-%m-%d') AS mission_date,
               missions.frequency, missions.scheduled_time, missions.title, missions.detail,
               missions.reward, missions.reward_type, missions.reward_name, missions.reward_key,
@@ -186,7 +192,8 @@ async function list(req, res, next) {
               missions.created_at, missions.updated_at
        FROM missions
        LEFT JOIN guild_members ON guild_members.guild_id = missions.guild_id AND guild_members.user_id = ?
-       WHERE ((missions.user_id = ? AND missions.category <> 'guild')
+       WHERE missions.deleted_at IS NULL
+         AND ((missions.user_id = ? AND missions.category <> 'guild')
           OR (missions.category = 'guild' AND guild_members.user_id IS NOT NULL AND missions.status = 'active'))
          AND ((missions.frequency = 'daily' AND missions.mission_date = CURDATE())
            OR (missions.frequency = 'weekly' AND missions.mission_date = DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY))
@@ -200,7 +207,8 @@ async function list(req, res, next) {
               todo_items.completed_at
        FROM todo_items
        INNER JOIN todo_lists ON todo_lists.id = todo_items.todo_list_id
-       WHERE todo_lists.user_id = ? AND todo_items.status <> 'cancelled'
+       WHERE todo_lists.user_id = ? AND todo_lists.deleted_at IS NULL
+         AND todo_items.deleted_at IS NULL AND todo_items.status <> 'cancelled'
        ORDER BY todo_items.due_date IS NULL ASC, todo_items.due_date ASC, todo_items.id ASC`,
       [req.user.id]
     );
@@ -242,9 +250,9 @@ async function toggle(req, res, next) {
 
       const [currentMissions] = await connection.query(
         `SELECT id, category, DATE_FORMAT(mission_date, '%Y-%m-%d') AS mission_date, frequency, scheduled_time, title, detail, reward, reward_type, reward_name, reward_key,
-                completed, failed
+                completed, failed, difficulty
          FROM missions
-         WHERE id = ? AND user_id = ? AND category <> 'guild'
+         WHERE id = ? AND user_id = ? AND deleted_at IS NULL AND category <> 'guild'
            AND ((frequency = 'daily' AND mission_date = CURDATE())
              OR (frequency = 'weekly' AND mission_date = DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY))
              OR (frequency = 'monthly' AND mission_date = DATE_FORMAT(CURDATE(), '%Y-%m-01')))
@@ -280,9 +288,10 @@ async function toggle(req, res, next) {
 
       if (isCompleting) {
         const [rewardResult] = await connection.query(
-          `INSERT IGNORE INTO user_rewards
+          `INSERT INTO user_rewards
              (user_id, mission_id, reward_type, reward_name, amount)
-           VALUES (?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE deleted_at = NULL, amount = VALUES(amount)`,
           [
             req.user.id,
             currentMission.id,
@@ -293,24 +302,16 @@ async function toggle(req, res, next) {
         );
 
         if (rewardResult.affectedRows) {
-          const missionExperience = currentMission.reward_type === 'xp'
-            ? currentMission.reward
-            : 10;
-
-          await connection.query(
-            `UPDATE user_stats
-             SET level = GREATEST(level, FLOOR((experience + ?) / 100) + 1),
-                 experience_to_next_level = (FLOOR((experience + ?) / 100) + 1) * 100,
-                 experience = experience + ?,
-                 updated_at = CURRENT_TIMESTAMP
-             WHERE user_id = ?`,
-            [missionExperience, missionExperience, missionExperience, req.user.id]
-          );
-          await connection.query(
-            `INSERT INTO user_experience_logs (user_id, source, amount, description)
-             VALUES (?, 'mission', ?, ?)`,
-            [req.user.id, missionExperience, currentMission.title]
-          );
+          if (currentMission.reward_type === 'xp') {
+            await grantExperience(
+              connection,
+              req.user.id,
+              currentMission.reward,
+              'mission',
+              currentMission.title,
+              { sourceId: currentMission.id, idempotencyKey: `mission:${currentMission.id}:xp` }
+            );
+          }
         }
 
         rewardGranted = Boolean(rewardResult.affectedRows);
@@ -381,7 +382,7 @@ async function toggle(req, res, next) {
       `SELECT id, category, DATE_FORMAT(mission_date, '%Y-%m-%d') AS mission_date, frequency, scheduled_time, title, detail, reward, reward_type, reward_name, reward_key,
               completed, completed_at, failed, failed_at, created_at, updated_at
        FROM missions
-       WHERE id = ? AND user_id = ? AND category <> 'guild'
+       WHERE id = ? AND user_id = ? AND deleted_at IS NULL AND category <> 'guild'
          AND ((frequency = 'daily' AND mission_date = CURDATE())
            OR (frequency = 'weekly' AND mission_date = DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY))
            OR (frequency = 'monthly' AND mission_date = DATE_FORMAT(CURDATE(), '%Y-%m-01')))
@@ -425,7 +426,7 @@ async function cancel(req, res, next) {
       const [missions] = await connection.query(
         `SELECT id, title, reward, reward_type, reward_key, completed, failed
          FROM missions
-         WHERE id = ? AND user_id = ? AND category <> 'guild'
+         WHERE id = ? AND user_id = ? AND deleted_at IS NULL AND category <> 'guild'
            AND ((frequency = 'daily' AND mission_date = CURDATE())
              OR (frequency = 'weekly' AND mission_date = DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY))
              OR (frequency = 'monthly' AND mission_date = DATE_FORMAT(CURDATE(), '%Y-%m-01')))
@@ -451,7 +452,7 @@ async function cancel(req, res, next) {
       const [rewards] = await connection.query(
         `SELECT id, reward_type, amount
          FROM user_rewards
-         WHERE user_id = ? AND mission_id = ?
+         WHERE user_id = ? AND mission_id = ? AND deleted_at IS NULL
          LIMIT 1 FOR UPDATE`,
         [req.user.id, mission.id]
       );
@@ -459,27 +460,13 @@ async function cancel(req, res, next) {
 
       if (mission.reward_type === 'xp') {
         const amount = reward?.amount || mission.reward;
-        await connection.query(
-          `UPDATE user_stats
-           SET level = FLOOR(GREATEST(experience - ?, 0) / 100) + 1,
-               experience_to_next_level =
-                 (FLOOR(GREATEST(experience - ?, 0) / 100) + 1) * 100,
-               experience = GREATEST(experience - ?, 0),
-               updated_at = CURRENT_TIMESTAMP
-           WHERE user_id = ?`,
-          [amount, amount, amount, req.user.id]
-        );
-        await connection.query(
-          `UPDATE user_experience_logs
-           SET deleted_at = CURRENT_TIMESTAMP
-           WHERE id = (
-             SELECT id FROM (
-               SELECT id FROM user_experience_logs
-               WHERE user_id = ? AND source = 'mission' AND amount = ? AND description = ?
-               ORDER BY id DESC LIMIT 1
-             ) AS latest_log
-           )`,
-          [req.user.id, amount, mission.title]
+        await grantExperience(
+          connection,
+          req.user.id,
+          -amount,
+          'mission_correction',
+          `Pembatalan reward: ${mission.title}`,
+          { sourceId: mission.id, idempotencyKey: `mission:${mission.id}:xp:correction` }
         );
       } else if (mission.reward_type === 'skill') {
         const skillKey = mission.reward_key || mission.reward_name;

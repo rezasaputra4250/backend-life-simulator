@@ -53,6 +53,7 @@ async function migrate() {
       password VARCHAR(255) NOT NULL,
       affiliate_code VARCHAR(32) NULL UNIQUE,
       referred_by BIGINT UNSIGNED NULL,
+      difficulty ENUM('easy', 'normal', 'hard', 'expert') NOT NULL DEFAULT 'easy',
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX users_role_id_index (role_id),
@@ -283,6 +284,7 @@ async function migrate() {
       completed_at DATETIME NULL,
       failed TINYINT(1) NOT NULL DEFAULT 0,
       failed_at DATETIME NULL,
+      grant_player_experience TINYINT(1) NOT NULL DEFAULT 1,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       UNIQUE KEY missions_owner_scope_title_date_unique (user_id, category, guild_id, title, mission_date),
@@ -451,7 +453,7 @@ async function migrate() {
       title VARCHAR(180) NOT NULL,
       detail VARCHAR(255) NULL,
       category ENUM('system', 'personal', 'guild') NOT NULL DEFAULT 'system',
-      difficulty ENUM('easy', 'medium', 'hard', 'epic') NOT NULL DEFAULT 'easy',
+      difficulty ENUM('easy', 'normal', 'hard', 'expert') NOT NULL DEFAULT 'easy',
       duration_minutes INT UNSIGNED NOT NULL DEFAULT 15,
       reward_xp INT UNSIGNED NOT NULL DEFAULT 10,
       reward_type ENUM('xp', 'skill', 'item', 'badge') NOT NULL DEFAULT 'xp',
@@ -495,13 +497,35 @@ async function migrate() {
       CONSTRAINT reward_transactions_user_foreign FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS difficulty_configs (
+      difficulty ENUM('easy', 'normal', 'hard', 'expert') NOT NULL PRIMARY KEY,
+      base_reward_xp INT UNSIGNED NOT NULL,
+      is_active TINYINT(1) NOT NULL DEFAULT 1,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS experience_transactions (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      user_id BIGINT UNSIGNED NOT NULL,
+      source_type VARCHAR(60) NOT NULL,
+      source_id BIGINT UNSIGNED NULL,
+      amount INT NOT NULL,
+      reason VARCHAR(255) NULL,
+      idempotency_key VARCHAR(190) NOT NULL UNIQUE,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT experience_transactions_user_foreign FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      INDEX experience_transactions_user_created_index (user_id, created_at),
+      INDEX experience_transactions_source_index (source_type, source_id)
+    );
+
     CREATE TABLE IF NOT EXISTS guild_missions (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
       guild_id BIGINT UNSIGNED NOT NULL,
       creator_id BIGINT UNSIGNED NOT NULL,
       title VARCHAR(180) NOT NULL,
       detail VARCHAR(255) NULL,
-      difficulty ENUM('easy', 'medium', 'hard', 'epic') NOT NULL DEFAULT 'easy',
+      difficulty ENUM('easy', 'normal', 'hard', 'expert') NOT NULL DEFAULT 'easy',
       target_progress INT UNSIGNED NOT NULL DEFAULT 1,
       current_progress INT UNSIGNED NOT NULL DEFAULT 0,
       reward_xp INT UNSIGNED NOT NULL DEFAULT 25,
@@ -549,8 +573,8 @@ async function migrate() {
     'user_badges', 'skills', 'user_skills', 'todo_lists', 'todo_items',
     'player_classes', 'player_class_progressions', 'user_classes',
     'mission_templates', 'notifications', 'notification_preferences',
-    'reward_transactions', 'guild_missions', 'guild_mission_contributions',
-    'mission_contributions',
+    'reward_transactions', 'difficulty_configs', 'experience_transactions',
+    'guild_missions', 'guild_mission_contributions', 'mission_contributions',
   ];
 
   for (const tableName of managedTables) {
@@ -592,6 +616,64 @@ async function migrate() {
     }
   }
 
+  const [userDifficultyColumns] = await connection.query(
+    `SELECT COLUMN_NAME, COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'users' AND COLUMN_NAME = 'difficulty'`,
+    [env.database.name]
+  );
+  if (!userDifficultyColumns.length) {
+    await connection.query(
+      "ALTER TABLE users ADD COLUMN difficulty ENUM('easy', 'normal', 'hard', 'expert') NOT NULL DEFAULT 'easy'"
+    );
+  } else if (userDifficultyColumns[0].COLUMN_TYPE.includes("'medium'")) {
+    await connection.query("UPDATE users SET difficulty = 'normal' WHERE difficulty = 'medium'");
+    await connection.query("UPDATE users SET difficulty = 'expert' WHERE difficulty = 'epic'");
+    await connection.query(
+      "ALTER TABLE users MODIFY COLUMN difficulty ENUM('easy', 'normal', 'hard', 'expert') NOT NULL DEFAULT 'easy'"
+    );
+  }
+
+  const difficultyTables = ['missions', 'mission_templates', 'guild_missions'];
+  for (const tableName of difficultyTables) {
+    const [difficultyColumns] = await connection.query(
+      `SELECT COLUMN_NAME, COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = 'difficulty'`,
+      [env.database.name, tableName]
+    );
+    if (difficultyColumns.length && difficultyColumns[0].COLUMN_TYPE.includes("'medium'")) {
+      await connection.query(`UPDATE \`${tableName}\` SET difficulty = 'normal' WHERE difficulty = 'medium'`);
+      await connection.query(`UPDATE \`${tableName}\` SET difficulty = 'expert' WHERE difficulty = 'epic'`);
+      await connection.query(
+        `ALTER TABLE \`${tableName}\` MODIFY COLUMN difficulty ENUM('easy', 'normal', 'hard', 'expert') NOT NULL DEFAULT 'easy'`
+      );
+    }
+  }
+
+  const [missionRewardColumns] = await connection.query(
+    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'missions' AND COLUMN_NAME = 'grant_player_experience'`,
+    [env.database.name]
+  );
+  if (!missionRewardColumns.length) {
+    await connection.query(
+      'ALTER TABLE missions ADD COLUMN grant_player_experience TINYINT(1) NOT NULL DEFAULT 1'
+    );
+  }
+  const [missionCategoryColumns] = await connection.query(
+    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'missions' AND COLUMN_NAME = 'category'`,
+    [env.database.name]
+  );
+  if (missionCategoryColumns.length) {
+    await connection.query("UPDATE missions SET grant_player_experience = 0 WHERE category = 'guild'");
+  }
+
+  await connection.query(
+    `INSERT INTO difficulty_configs (difficulty, base_reward_xp)
+     VALUES ('easy', 100), ('normal', 50), ('hard', 10), ('expert', 5)
+     ON DUPLICATE KEY UPDATE base_reward_xp = VALUES(base_reward_xp), is_active = 1`
+  );
+
   const [missionExtraColumns] = await connection.query(
     `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
      WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'missions'
@@ -600,7 +682,7 @@ async function migrate() {
   );
   const extraNames = missionExtraColumns.map((column) => column.COLUMN_NAME);
   if (!extraNames.includes('difficulty')) {
-    await connection.query("ALTER TABLE missions ADD COLUMN difficulty ENUM('easy', 'medium', 'hard', 'epic') NOT NULL DEFAULT 'easy' AFTER detail");
+    await connection.query("ALTER TABLE missions ADD COLUMN difficulty ENUM('easy', 'normal', 'hard', 'expert') NOT NULL DEFAULT 'easy' AFTER detail");
   }
   if (!extraNames.includes('duration_minutes')) {
     await connection.query('ALTER TABLE missions ADD COLUMN duration_minutes INT UNSIGNED NOT NULL DEFAULT 15 AFTER difficulty');
@@ -630,9 +712,9 @@ async function migrate() {
   }
 
   const missionTemplates = [
-    ['Fokus kerja', 'Selesaikan satu pekerjaan penting tanpa distraksi.', 'personal', 'medium', 30, 50],
+    ['Fokus kerja', 'Selesaikan satu pekerjaan penting tanpa distraksi.', 'personal', 'normal', 30, 50],
     ['Latihan pagi', 'Bergerak aktif selama minimal 20 menit.', 'personal', 'easy', 20, 25],
-    ['Belajar skill baru', 'Luangkan waktu untuk belajar dan mencatat hal penting.', 'personal', 'medium', 25, 50],
+    ['Belajar skill baru', 'Luangkan waktu untuk belajar dan mencatat hal penting.', 'personal', 'normal', 25, 50],
     ['Refleksi harian', 'Tulis jurnal singkat tentang progres hari ini.', 'personal', 'easy', 10, 25],
   ];
   for (const template of missionTemplates) {
@@ -787,12 +869,12 @@ async function migrate() {
   await connection.query(
     `INSERT IGNORE INTO missions
        (user_id, category, guild_id, target_progress, current_progress, status, legacy_guild_mission_id,
-        mission_date, frequency, title, detail, difficulty, reward, reward_type, reward_name, reward_key, custom_source,
+        mission_date, frequency, title, detail, difficulty, reward, reward_type, reward_name, reward_key, custom_source, grant_player_experience,
         completed, completed_at)
      SELECT guild_missions.creator_id, 'guild', guild_missions.guild_id,
             guild_missions.target_progress, guild_missions.current_progress, guild_missions.status, guild_missions.id,
             guild_missions.mission_date, 'daily', guild_missions.title, guild_missions.detail, guild_missions.difficulty,
-            guild_missions.reward_xp, 'xp', CONCAT(guild_missions.reward_xp, ' XP untuk kontribusi'), 'xp', 1,
+            guild_missions.reward_xp, 'xp', CONCAT(guild_missions.reward_xp, ' XP untuk kontribusi'), 'xp', 1, 0,
             IF(guild_missions.status = 'completed', 1, 0), guild_missions.completed_at
      FROM guild_missions
      LEFT JOIN missions ON missions.legacy_guild_mission_id = guild_missions.id
@@ -991,8 +1073,8 @@ async function migrate() {
   for (const mission of require('../constants/missions').allMissionSeeds) {
     await connection.query(
       `INSERT INTO missions
-         (user_id, mission_date, frequency, scheduled_time, title, detail, reward, reward_type, reward_name, reward_key)
-       SELECT users.id,
+         (user_id, difficulty, mission_date, frequency, scheduled_time, title, detail, reward, reward_type, reward_name, reward_key)
+       SELECT users.id, users.difficulty,
               CASE ?
                 WHEN 'daily' THEN CURDATE()
                 WHEN 'weekly' THEN DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)

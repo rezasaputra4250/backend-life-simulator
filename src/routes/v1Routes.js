@@ -26,13 +26,16 @@ router.use('/guilds', guildRoutes);
 router.get('/classes', authenticate, rpgController.classes);
 router.post('/me/class', authenticate, [body('class_id').isInt({ min: 1 }).withMessage('Class tidak valid.')], rpgController.selectClass);
 router.get('/me/progression', authenticate, rpgController.progression);
+router.get('/difficulty-configs', authenticate, rpgController.difficultyConfigs);
+router.patch('/me/difficulty', authenticate, [body('difficulty').isIn(['easy', 'normal', 'hard', 'expert']).withMessage('Difficulty tidak valid.')], rpgController.updateDifficulty);
+router.get('/me/experience-history', authenticate, rpgController.experienceHistory);
 router.get('/leaderboards', authenticate, rpgController.leaderboard);
 router.get('/mission-templates', authenticate, customMissionController.templates);
 router.post('/missions/custom', authenticate, [
   body('title').isString().trim().isLength({ min: 2, max: 180 }).withMessage('Judul misi harus antara 2 sampai 180 karakter.'),
   body('detail').optional({ nullable: true }).isString().trim().isLength({ max: 255 }).withMessage('Detail misi maksimal 255 karakter.'),
-  body('category').optional().isIn(['personal', 'guild']).withMessage('Kategori misi tidak valid.'),
-  body('difficulty').optional().isIn(['easy', 'medium', 'hard', 'epic']).withMessage('Tingkat kesulitan tidak valid.'),
+  body('category').optional().isIn(['personal']).withMessage('Kategori misi personal tidak valid.'),
+  body('difficulty').optional().isIn(['easy', 'normal', 'hard', 'expert']).withMessage('Tingkat kesulitan tidak valid.'),
   body('duration_minutes').optional().isInt({ min: 1, max: 480 }).withMessage('Durasi misi harus antara 1 sampai 480 menit.'),
   body('reward_xp').optional().isInt({ min: 1, max: 500 }).withMessage('Reward XP harus antara 1 sampai 500.'),
   body('frequency').optional().isIn(['daily', 'weekly', 'monthly']).withMessage('Frekuensi misi tidak valid.'),
@@ -49,7 +52,7 @@ router.use('/admin', authenticate, requireAdmin);
 router.get('/admin/classes', adminController.classes);
 router.post('/admin/mission-templates', [
   body('title').isString().trim().isLength({ min: 2, max: 180 }).withMessage('Judul template wajib diisi.'),
-  body('difficulty').optional().isIn(['easy', 'medium', 'hard', 'epic']).withMessage('Tingkat kesulitan tidak valid.'),
+  body('difficulty').optional().isIn(['easy', 'normal', 'hard', 'expert']).withMessage('Tingkat kesulitan tidak valid.'),
   body('reward_xp').optional().isInt({ min: 1, max: 1000 }).withMessage('Reward XP tidak valid.'),
 ], adminController.createTemplate);
 router.patch('/admin/mission-templates/:id/toggle', [param('id').isInt({ min: 1 }).withMessage('ID template tidak valid.')], adminController.toggleTemplate);
