@@ -5,6 +5,7 @@ const env = require('../config/env');
 const { roles } = require('../constants/roles');
 const { skills } = require('../constants/skills');
 const { ensureSystemMission } = require('../services/missionDomainService');
+const { ensureUserSkills } = require('../services/userSkillService');
 
 function experienceForLevel(level) {
   let requirement = 100;
@@ -1394,9 +1395,13 @@ async function migrate() {
   );
 
   const [activeUsers] = await connection.query(
-    'SELECT id, difficulty FROM users WHERE deleted_at IS NULL ORDER BY id ASC'
+    `SELECT users.id, users.difficulty, player_classes.name AS class_name
+     FROM users
+     LEFT JOIN player_classes ON player_classes.id = users.class_id AND player_classes.deleted_at IS NULL
+     WHERE users.deleted_at IS NULL ORDER BY users.id ASC`
   );
   for (const user of activeUsers) {
+    await ensureUserSkills(connection, user.id, user.class_name);
     for (const mission of require('../constants/missions').allMissionSeeds) {
       await ensureSystemMission(connection, user.id, user.difficulty || 'easy', {
         ...mission,

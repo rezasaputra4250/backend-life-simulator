@@ -1,6 +1,7 @@
 const { validationResult } = require('express-validator');
 const pool = require('../config/database');
 const { getProgression, experienceForLevel, levelForExperience } = require('../services/progressionService');
+const { ensureUserSkills } = require('../services/userSkillService');
 
 function invalid(req, res) {
   const errors = validationResult(req);
@@ -86,6 +87,7 @@ async function selectClass(req, res, next) {
           req.user.id,
         ]
       );
+      await ensureUserSkills(connection, req.user.id, chosen.name);
       await connection.commit();
     } catch (error) { await connection.rollback(); throw error; } finally { connection.release(); }
     res.status(200).json({ message: 'Class karakter berhasil diperbarui.', data: chosen });

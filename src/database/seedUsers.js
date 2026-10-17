@@ -5,6 +5,7 @@ const pool = require('../config/database');
 const { faker } = require('@faker-js/faker');
 const { allMissionSeeds } = require('../constants/missions');
 const { ensureSystemMission } = require('../services/missionDomainService');
+const { ensureUserSkills } = require('../services/userSkillService');
 
 async function seedUsers() {
   const userCount = Math.max(10, Number(process.env.SEED_USER_COUNT || 100));
@@ -102,20 +103,11 @@ async function seedUsers() {
        ON DUPLICATE KEY UPDATE deleted_at = NULL, updated_at = CURRENT_TIMESTAMP`,
       [user.id]
     );
-    await pool.query(
-      `INSERT IGNORE INTO user_skills (user_id, skill_id)
-       SELECT ?, skills.id
-       FROM skills
-       WHERE skills.name IN ('productivity', 'communication')`,
-      [user.id]
+    const [classRows] = await pool.query(
+      'SELECT name FROM player_classes WHERE id = ? AND deleted_at IS NULL LIMIT 1',
+      [user.class_id]
     );
-    await pool.query(
-      `UPDATE user_skills
-       INNER JOIN skills ON skills.id = user_skills.skill_id
-       SET user_skills.deleted_at = NULL, user_skills.updated_at = CURRENT_TIMESTAMP
-       WHERE user_skills.user_id = ? AND skills.name IN ('productivity', 'communication')`,
-      [user.id]
-    );
+    await ensureUserSkills(pool, user.id, classRows[0]?.name);
 
     for (const mission of allMissionSeeds) {
       await ensureSystemMission(pool, user.id, user.difficulty || 'easy', {
