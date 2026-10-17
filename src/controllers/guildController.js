@@ -154,7 +154,7 @@ async function contributeMission(req, res, next) {
       [nextProgress, completed ? 'completed' : 'active', completed ? 1 : 0, completed ? new Date() : null, mission.id]
     );
     await syncGuildMissionContribution(connection, mission, req.user.id, applied, nextProgress, completed);
-    const reward = Math.max(1, Math.floor(Number(mission.reward_xp) * applied / Number(mission.target_progress)));
+    const reward = Math.max(1, Math.floor(Number(mission.reward) * applied / Number(mission.target_progress)));
     const [rewardTransaction] = await connection.query(
       `INSERT IGNORE INTO reward_transactions (user_id, source_type, source_id, reward_type, amount)
        VALUES (?, 'guild_mission_contribution', ?, 'xp', ?)`,
