@@ -21,9 +21,16 @@ Dokumen ini mencatat status implementasi backend terhadap master prompt. Audit d
 
 ## Tahap backend berikutnya
 
-- Memindahkan sumber penulisan System Mission, Personal Mission, dan Guild Mission ke repository/domain service masing-masing.
-- Menyediakan projection kompatibilitas untuk tabel `missions` tanpa menjadikannya sumber penulisan utama.
+- Menyelesaikan dual-write transaction untuk seluruh jalur create agar projection kompatibilitas dan domain table selalu atomik.
+- Mengubah read path aktif menjadi membaca domain table dengan fallback legacy selama masa transisi.
 - Menambah integration test untuk migration idempotency, concurrent completion, multi-level EXP, soft delete, dan explicit guild EXP.
+
+## Domain tables
+
+- `system_mission_instances` menyimpan instance System Mission per user.
+- `personal_missions` menyimpan Personal Mission per user.
+- `guild_missions` menyimpan Guild Mission dan memiliki `legacy_mission_id` untuk projection kompatibilitas.
+- `missions` masih dipertahankan sebagai projection legacy selama endpoint existing dimigrasikan secara bertahap.
 
 ## Catatan balancing
 

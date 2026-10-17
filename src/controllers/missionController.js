@@ -4,6 +4,7 @@ const { allMissionSeeds } = require('../constants/missions');
 const { itemCatalog, badgeCatalog } = require('../constants/rewards');
 const { skills } = require('../constants/skills');
 const { recordMissionReward } = require('../services/rewardService');
+const { registerSystemMission, syncMissionStatus } = require('../services/missionDomainService');
 
 async function ensureCurrentMissions(userId, connection = pool) {
   const [userRows] = await connection.query('SELECT difficulty FROM users WHERE id = ? LIMIT 1', [userId]);
@@ -33,6 +34,22 @@ async function ensureCurrentMissions(userId, connection = pool) {
         mission.reward_key,
       ]
     );
+    const [missionRows] = await connection.query(
+      `SELECT id, user_id, difficulty, mission_date, frequency, scheduled_time, title, detail,
+              duration_minutes, reward, reward_type, reward_name, reward_key,
+              completed, completed_at, failed, failed_at
+       FROM missions
+       WHERE user_id = ? AND category = 'system' AND title = ?
+         AND mission_date = CASE ?
+           WHEN 'daily' THEN CURDATE()
+           WHEN 'weekly' THEN DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)
+           ELSE DATE_FORMAT(CURDATE(), '%Y-%m-01')
+         END
+         AND deleted_at IS NULL
+       LIMIT 1`,
+      [userId, mission.title, mission.frequency || 'daily']
+    );
+    if (missionRows[0]) await registerSystemMission(connection, missionRows[0].id, missionRows[0]);
   }
 }
 
@@ -283,6 +300,13 @@ async function toggle(req, res, next) {
         `UPDATE missions SET completed = ?, completed_at = ? WHERE id = ? AND user_id = ? AND category <> 'guild'`,
         [isCompleting ? 1 : 0, isCompleting ? new Date() : null, req.params.id, req.user.id]
       );
+      await syncMissionStatus(connection, {
+        ...currentMission,
+        completed: isCompleting,
+        completed_at: isCompleting ? new Date() : null,
+        failed: Boolean(currentMission.failed),
+        failed_at: null,
+      });
 
       if (isCompleting) {
         const reward = await recordMissionReward(connection, req.user.id, currentMission);
@@ -396,7 +420,7 @@ async function cancel(req, res, next) {
       await markExpiredMissions(req.user.id, connection);
 
       const [missions] = await connection.query(
-        `SELECT id, title, reward, reward_type, reward_key, completed, failed
+        `SELECT id, category, title, reward, reward_type, reward_key, completed, failed
          FROM missions
          WHERE id = ? AND user_id = ? AND deleted_at IS NULL AND category <> 'guild'
            AND ((frequency = 'daily' AND mission_date = CURDATE())
@@ -478,6 +502,13 @@ async function cancel(req, res, next) {
          WHERE id = ? AND user_id = ?`,
         [mission.id, req.user.id]
       );
+      await syncMissionStatus(connection, {
+        ...mission,
+        completed: false,
+        completed_at: null,
+        failed: Boolean(mission.failed),
+        failed_at: null,
+      });
 
       await connection.commit();
     } catch (error) {

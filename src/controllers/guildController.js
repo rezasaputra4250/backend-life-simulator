@@ -1,6 +1,7 @@
 const { validationResult } = require('express-validator');
 const pool = require('../config/database');
 const { grantExperience } = require('../services/progressionService');
+const { registerGuildMission, syncGuildMissionContribution } = require('../services/missionDomainService');
 
 function validationErrorResponse(req, res) {
   const errors = validationResult(req);
@@ -109,12 +110,13 @@ async function createMission(req, res, next) {
       [`Guild memiliki misi baru: ${req.body.title}.`, req.params.id, result.insertId, req.params.id, req.user.id]
     );
     const [missions] = await pool.query(
-      `SELECT id, guild_id, user_id AS creator_id, title, detail, difficulty,
-              target_progress, current_progress, reward AS reward_xp, scheduled_time,
+      `SELECT id, guild_id, user_id, user_id AS creator_id, title, detail, difficulty,
+              target_progress, current_progress, reward, reward AS reward_xp, grant_player_experience, scheduled_time,
               DATE_FORMAT(mission_date, '%Y-%m-%d') AS mission_date, status, completed_at
        FROM missions WHERE id = ? AND deleted_at IS NULL`,
       [result.insertId]
     );
+    if (missions[0]) await registerGuildMission(pool, result.insertId, missions[0]);
     return res.status(201).json({ message: 'Misi guild berhasil dibuat.', data: missions[0] });
   } catch (error) { return next(error); }
 }
@@ -151,6 +153,7 @@ async function contributeMission(req, res, next) {
        WHERE id = ?`,
       [nextProgress, completed ? 'completed' : 'active', completed ? 1 : 0, completed ? new Date() : null, mission.id]
     );
+    await syncGuildMissionContribution(connection, mission, req.user.id, applied, nextProgress, completed);
     const reward = Math.max(1, Math.floor(Number(mission.reward_xp) * applied / Number(mission.target_progress)));
     const [rewardTransaction] = await connection.query(
       `INSERT IGNORE INTO reward_transactions (user_id, source_type, source_id, reward_type, amount)

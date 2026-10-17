@@ -539,6 +539,7 @@ async function migrate() {
 
     CREATE TABLE IF NOT EXISTS guild_missions (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      legacy_mission_id BIGINT UNSIGNED NULL UNIQUE,
       guild_id BIGINT UNSIGNED NOT NULL,
       creator_id BIGINT UNSIGNED NOT NULL,
       title VARCHAR(180) NOT NULL,
@@ -547,6 +548,7 @@ async function migrate() {
       target_progress INT UNSIGNED NOT NULL DEFAULT 1,
       current_progress INT UNSIGNED NOT NULL DEFAULT 0,
       reward_xp INT UNSIGNED NOT NULL DEFAULT 25,
+      grant_player_experience TINYINT(1) NOT NULL DEFAULT 0,
       mission_date DATE NOT NULL,
       status ENUM('active', 'completed', 'cancelled') NOT NULL DEFAULT 'active',
       completed_at DATETIME NULL,
@@ -582,6 +584,59 @@ async function migrate() {
     );
   `);
 
+  await connection.query(`
+    CREATE TABLE IF NOT EXISTS system_mission_instances (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      legacy_mission_id BIGINT UNSIGNED NULL UNIQUE,
+      user_id BIGINT UNSIGNED NOT NULL,
+      category VARCHAR(80) NOT NULL DEFAULT 'system',
+      difficulty ENUM('easy', 'normal', 'hard', 'expert') NOT NULL DEFAULT 'easy',
+      mission_date DATE NOT NULL,
+      frequency ENUM('daily', 'weekly', 'monthly') NOT NULL DEFAULT 'daily',
+      scheduled_time TIME NULL,
+      title VARCHAR(180) NOT NULL,
+      detail VARCHAR(255) NULL,
+      duration_minutes INT UNSIGNED NOT NULL DEFAULT 15,
+      reward INT UNSIGNED NOT NULL DEFAULT 0,
+      reward_type ENUM('xp', 'skill', 'item', 'badge') NOT NULL DEFAULT 'xp',
+      reward_name VARCHAR(160) NULL,
+      reward_key VARCHAR(100) NULL,
+      completed TINYINT(1) NOT NULL DEFAULT 0,
+      completed_at DATETIME NULL,
+      failed TINYINT(1) NOT NULL DEFAULT 0,
+      failed_at DATETIME NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX system_mission_instances_user_date_index (user_id, mission_date),
+      CONSTRAINT system_mission_instances_user_foreign FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS personal_missions (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      legacy_mission_id BIGINT UNSIGNED NULL UNIQUE,
+      user_id BIGINT UNSIGNED NOT NULL,
+      difficulty ENUM('easy', 'normal', 'hard', 'expert') NOT NULL DEFAULT 'easy',
+      mission_date DATE NOT NULL,
+      frequency ENUM('daily', 'weekly', 'monthly') NOT NULL DEFAULT 'daily',
+      scheduled_time TIME NULL,
+      title VARCHAR(180) NOT NULL,
+      detail VARCHAR(255) NULL,
+      duration_minutes INT UNSIGNED NOT NULL DEFAULT 15,
+      reward INT UNSIGNED NOT NULL DEFAULT 0,
+      reward_type ENUM('xp', 'skill', 'item', 'badge') NOT NULL DEFAULT 'xp',
+      reward_name VARCHAR(160) NULL,
+      reward_key VARCHAR(100) NULL,
+      completed TINYINT(1) NOT NULL DEFAULT 0,
+      completed_at DATETIME NULL,
+      failed TINYINT(1) NOT NULL DEFAULT 0,
+      failed_at DATETIME NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX personal_missions_user_date_index (user_id, mission_date),
+      CONSTRAINT personal_missions_user_foreign FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+  `);
+
   // Keep timestamps and soft deletes consistent for new and existing tables.
   const managedTables = [
     'roles', 'companies', 'users', 'user_profiles', 'affiliate_referrals',
@@ -593,6 +648,7 @@ async function migrate() {
     'mission_templates', 'notifications', 'notification_preferences',
     'reward_transactions', 'difficulty_configs', 'experience_transactions',
     'guild_missions', 'guild_mission_contributions', 'mission_contributions',
+    'system_mission_instances', 'personal_missions',
   ];
 
   for (const tableName of managedTables) {
@@ -651,6 +707,21 @@ async function migrate() {
         "ALTER TABLE users MODIFY COLUMN difficulty ENUM('easy', 'normal', 'hard', 'expert') NOT NULL DEFAULT 'easy'"
       );
     }
+  }
+
+  const [guildMissionDomainColumns] = await connection.query(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'guild_missions'
+       AND COLUMN_NAME IN ('legacy_mission_id', 'grant_player_experience')`,
+    [env.database.name]
+  );
+  const guildMissionDomainColumnNames = guildMissionDomainColumns.map((column) => column.COLUMN_NAME);
+  if (!guildMissionDomainColumnNames.includes('legacy_mission_id')) {
+    await connection.query('ALTER TABLE guild_missions ADD COLUMN legacy_mission_id BIGINT UNSIGNED NULL UNIQUE FIRST');
+  }
+  if (!guildMissionDomainColumnNames.includes('grant_player_experience')) {
+    await connection.query('ALTER TABLE guild_missions ADD COLUMN grant_player_experience TINYINT(1) NOT NULL DEFAULT 0 AFTER reward_xp');
   }
 
   const difficultyTables = ['missions', 'mission_templates', 'guild_missions'];
@@ -908,6 +979,37 @@ async function migrate() {
      SELECT missions.id, guild_mission_contributions.user_id, guild_mission_contributions.amount
      FROM guild_mission_contributions
      INNER JOIN missions ON missions.legacy_guild_mission_id = guild_mission_contributions.mission_id`
+  );
+
+  await connection.query(
+    `UPDATE guild_missions
+     INNER JOIN missions ON missions.legacy_guild_mission_id = guild_missions.id
+     SET guild_missions.legacy_mission_id = missions.id
+     WHERE guild_missions.legacy_mission_id IS NULL`
+  );
+
+  await connection.query(
+    `INSERT IGNORE INTO system_mission_instances
+       (legacy_mission_id, user_id, category, difficulty, mission_date, frequency, scheduled_time,
+        title, detail, duration_minutes, reward, reward_type, reward_name, reward_key,
+        completed, completed_at, failed, failed_at, created_at, updated_at, deleted_at)
+     SELECT id, user_id, 'system', difficulty, mission_date, frequency, scheduled_time,
+            title, detail, duration_minutes, reward, reward_type, reward_name, reward_key,
+            completed, completed_at, failed, failed_at, created_at, updated_at, deleted_at
+     FROM missions
+     WHERE category = 'system'`
+  );
+
+  await connection.query(
+    `INSERT IGNORE INTO personal_missions
+       (legacy_mission_id, user_id, difficulty, mission_date, frequency, scheduled_time,
+        title, detail, duration_minutes, reward, reward_type, reward_name, reward_key,
+        completed, completed_at, failed, failed_at, created_at, updated_at, deleted_at)
+     SELECT id, user_id, difficulty, mission_date, frequency, scheduled_time,
+            title, detail, duration_minutes, reward, reward_type, reward_name, reward_key,
+            completed, completed_at, failed, failed_at, created_at, updated_at, deleted_at
+     FROM missions
+     WHERE category = 'personal'`
   );
 
   for (const role of roles) {

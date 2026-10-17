@@ -1,6 +1,7 @@
 const { validationResult } = require('express-validator');
 const pool = require('../config/database');
 const { recordMissionReward } = require('../services/rewardService');
+const { registerPersonalMission } = require('../services/missionDomainService');
 
 const allowedDifficulties = ['easy', 'normal', 'hard', 'expert'];
 function invalid(req, res) {
@@ -30,14 +31,25 @@ async function create(req, res, next) {
     );
     const reward = Number(difficultyRows[0]?.base_reward_xp || 25);
     const date = mission_date ? String(mission_date).slice(0, 10) : new Date().toISOString().slice(0, 10);
-    const [result] = await pool.query(
-      `INSERT INTO missions (user_id, category, mission_date, frequency, scheduled_time, title, detail, difficulty,
-         duration_minutes, reward, reward_type, reward_name, reward_key, custom_source)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'xp', ?, 'xp', 1)`,
-      [req.user.id, category, date, frequency, scheduled_time || null, title, detail || null, difficulty, duration_minutes, reward, `${reward} XP`]
-    );
-    const [rows] = await pool.query('SELECT id, category, mission_date, frequency, scheduled_time, title, detail, difficulty, duration_minutes, reward, reward_type, reward_name, reward_key, completed, failed FROM missions WHERE id = ? AND deleted_at IS NULL', [result.insertId]);
-    res.status(201).json({ message: 'Misi berhasil dibuat.', data: rows[0] });
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      const [result] = await connection.query(
+        `INSERT INTO missions (user_id, category, mission_date, frequency, scheduled_time, title, detail, difficulty,
+           duration_minutes, reward, reward_type, reward_name, reward_key, custom_source)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'xp', ?, 'xp', 1)`,
+        [req.user.id, category, date, frequency, scheduled_time || null, title, detail || null, difficulty, duration_minutes, reward, `${reward} XP`]
+      );
+      const [rows] = await connection.query('SELECT id, user_id, category, mission_date, frequency, scheduled_time, title, detail, difficulty, duration_minutes, reward, reward_type, reward_name, reward_key, completed, failed FROM missions WHERE id = ? AND deleted_at IS NULL', [result.insertId]);
+      if (rows[0]) await registerPersonalMission(connection, result.insertId, rows[0]);
+      await connection.commit();
+      res.status(201).json({ message: 'Misi berhasil dibuat.', data: rows[0] });
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
   } catch (error) { next(error); }
 }
 
