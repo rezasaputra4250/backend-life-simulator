@@ -52,4 +52,20 @@ async function recordGuildContributionReward(connection, userId, mission, amount
   return { granted: progression.amount > 0, amount: progression.amount, progression };
 }
 
-module.exports = { recordMissionReward, recordGuildContributionReward };
+async function reverseMissionExperience(connection, userId, mission, amount) {
+  const correctionAmount = Math.max(0, Number(amount) || 0);
+  if (!correctionAmount || mission.reward_type !== 'xp') {
+    return { amount: 0, levelUp: false };
+  }
+
+  return grantExperience(
+    connection,
+    userId,
+    -correctionAmount,
+    'mission_correction',
+    `Pembatalan reward: ${mission.title}`,
+    { sourceId: mission.id, idempotencyKey: `mission:${mission.id}:xp:correction` }
+  );
+}
+
+module.exports = { recordMissionReward, recordGuildContributionReward, reverseMissionExperience };

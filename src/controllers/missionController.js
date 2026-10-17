@@ -3,7 +3,7 @@ const { validationResult } = require('express-validator');
 const { allMissionSeeds } = require('../constants/missions');
 const { itemCatalog, badgeCatalog } = require('../constants/rewards');
 const { skills } = require('../constants/skills');
-const { recordMissionReward } = require('../services/rewardService');
+const { recordMissionReward, reverseMissionExperience } = require('../services/rewardService');
 const { ensureSystemMission, syncMissionStatus } = require('../services/missionDomainService');
 
 async function ensureCurrentMissions(userId, connection = pool) {
@@ -500,14 +500,7 @@ async function cancel(req, res, next) {
 
       if (mission.reward_type === 'xp') {
         const amount = reward?.amount || mission.reward;
-        await grantExperience(
-          connection,
-          req.user.id,
-          -amount,
-          'mission_correction',
-          `Pembatalan reward: ${mission.title}`,
-          { sourceId: mission.id, idempotencyKey: `mission:${mission.id}:xp:correction` }
-        );
+        await reverseMissionExperience(connection, req.user.id, mission, amount);
       } else if (mission.reward_type === 'skill') {
         const skillKey = mission.reward_key || mission.reward_name;
         const skillExperience = Math.max(mission.reward || 0, 10);

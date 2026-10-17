@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { recordMissionReward, recordGuildContributionReward } = require('../src/services/rewardService');
+const { recordMissionReward, recordGuildContributionReward, reverseMissionExperience } = require('../src/services/rewardService');
 
 function fakeConnection(results) {
   const calls = [];
@@ -102,4 +102,22 @@ test('grants explicit guild contribution EXP through progression service', async
 
   assert.equal(result.amount, 50);
   assert.equal(connection.calls.length, 5);
+});
+
+test('records mission EXP correction as a negative ledger transaction', async () => {
+  const connection = fakeConnection([
+    [{ affectedRows: 1 }, []],
+    [[{ level: 2, experience: 100 }], []],
+    [{ affectedRows: 1 }, []],
+    [{ affectedRows: 1 }, []],
+  ]);
+  const result = await reverseMissionExperience(connection, 7, {
+    id: 31,
+    title: 'Fokus kerja',
+    reward_type: 'xp',
+  }, 50);
+
+  assert.equal(result.amount, -50);
+  assert.match(connection.calls[2].sql, /UPDATE user_stats/);
+  assert.equal(connection.calls[2].params[1], 50);
 });
