@@ -56,6 +56,15 @@ async function seedUsers() {
     );
   }
 
+  await pool.query(
+    `INSERT INTO user_classes (user_id, class_id)
+     SELECT users.id, (SELECT id FROM player_classes WHERE is_active = 1 AND deleted_at IS NULL ORDER BY id ASC LIMIT 1)
+     FROM users
+     WHERE users.email LIKE 'test%@example.com'
+       AND users.deleted_at IS NULL
+     ON DUPLICATE KEY UPDATE deleted_at = NULL, updated_at = CURRENT_TIMESTAMP`
+  );
+
   console.log(`Seeder user selesai: ${userCount} user tersedia dengan email test1@example.com sampai test${userCount}@example.com.`);
 }
 
