@@ -821,10 +821,39 @@ async function migrate() {
     await connection.query("ALTER TABLE missions ADD COLUMN custom_source TINYINT(1) NOT NULL DEFAULT 0 AFTER template_id");
   }
 
+  // Rename the original fantasy classes while preserving their IDs and user selections.
+  await connection.query(
+    `UPDATE player_classes
+     SET name = 'karyawan', label = 'Karyawan',
+         description = 'Mengasah produktivitas, komunikasi, dan keseimbangan kerja.',
+         primary_stat = 'stamina', strength_bonus = 1, intelligence_bonus = 1,
+         agility_bonus = 0, stamina_bonus = 2, luck_bonus = 1
+     WHERE name = 'warrior'`
+  );
+  await connection.query(
+    `UPDATE player_classes
+     SET name = 'mahasiswa', label = 'Mahasiswa',
+         description = 'Mengembangkan keahlian, kemandirian, dan kemampuan memecahkan masalah.',
+         primary_stat = 'intelligence', strength_bonus = 0, intelligence_bonus = 3,
+         agility_bonus = 2, stamina_bonus = 0, luck_bonus = 1
+     WHERE name = 'scholar'`
+  );
+  await connection.query(
+    `UPDATE player_classes
+     SET name = 'petani', label = 'Petani',
+         description = 'Menjaga konsistensi, ketahanan fisik, dan ketekunan dari hari ke hari.',
+         primary_stat = 'stamina', strength_bonus = 2, intelligence_bonus = 0,
+         agility_bonus = 0, stamina_bonus = 3, luck_bonus = 0
+     WHERE name = 'artisan'`
+  );
+
   const classSeeds = [
-    ['warrior', 'Warrior', 'Petarung yang unggul dalam kekuatan dan stamina.', 'strength', 3, 0, 0, 2, 0],
-    ['scholar', 'Scholar', 'Pembelajar yang unggul dalam kecerdasan dan pemecahan masalah.', 'intelligence', 0, 3, 1, 0, 1],
-    ['artisan', 'Artisan', 'Pencipta yang tekun, lincah, dan konsisten.', 'agility', 0, 1, 3, 1, 0],
+    ['pelajar', 'Pelajar', 'Membangun fondasi pengetahuan, disiplin belajar, dan rasa ingin tahu.', 'intelligence', 0, 3, 1, 1, 1],
+    ['mahasiswa', 'Mahasiswa', 'Mengembangkan keahlian, kemandirian, dan kemampuan memecahkan masalah.', 'intelligence', 0, 3, 2, 0, 1],
+    ['petani', 'Petani', 'Menjaga konsistensi, ketahanan fisik, dan ketekunan dari hari ke hari.', 'stamina', 2, 0, 0, 3, 0],
+    ['karyawan', 'Karyawan', 'Mengasah produktivitas, komunikasi, dan keseimbangan kerja.', 'stamina', 1, 1, 0, 2, 1],
+    ['wirausahawan', 'Wirausahawan', 'Membangun peluang dengan keberanian, kreativitas, dan pengambilan keputusan.', 'luck', 1, 2, 1, 0, 3],
+    ['pekerja_lepas', 'Pekerja Lepas', 'Mengatur waktu secara mandiri, adaptif, dan bertanggung jawab pada hasil.', 'agility', 0, 1, 3, 1, 1],
   ];
   for (const seed of classSeeds) {
     await connection.query(
