@@ -48,6 +48,31 @@ async function list(req, res, next) {
        ORDER BY guild_invitations.created_at DESC`,
       [req.user.id]
     );
+    const [canonicalMissions] = await pool.query(
+      `SELECT missions.id, missions.guild_id, missions.user_id AS creator_id,
+              missions.title, missions.detail, missions.difficulty,
+              missions.target_progress, missions.current_progress,
+              missions.reward AS reward_xp, DATE_FORMAT(missions.mission_date, '%Y-%m-%d') AS mission_date,
+              missions.scheduled_time, missions.status, missions.completed_at
+       FROM missions
+       INNER JOIN guild_members ON guild_members.guild_id = missions.guild_id
+         AND guild_members.user_id = ? AND guild_members.deleted_at IS NULL
+       WHERE missions.deleted_at IS NULL AND missions.category = 'guild'
+         AND missions.status = 'active' AND missions.mission_date = CURDATE()
+       ORDER BY missions.mission_date ASC, missions.id DESC`,
+      [req.user.id]
+    );
+    return res.json({
+      message: 'Data guild berhasil diambil.',
+      guilds: guilds.map((guild) => ({
+        ...guild,
+        members: members.filter((member) => Number(member.guild_id) === Number(guild.id)),
+        missions: canonicalMissions.filter((mission) => Number(mission.guild_id) === Number(guild.id)),
+      })),
+      invitations,
+    });
+
+    // Legacy union kept below until the legacy tables are removed from old installations.
     const [missions] = await pool.query(
       `SELECT * FROM (SELECT guild_missions.legacy_mission_id AS id, guild_missions.guild_id,
               guild_missions.creator_id, guild_missions.title, guild_missions.detail,

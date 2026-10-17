@@ -1241,6 +1241,46 @@ async function migrate() {
     }
   }
 
+  // Canonicalize all mission instances into missions before retiring duplicate tables.
+  // The legacy IDs are preserved through missions.id/legacy_guild_mission_id so existing
+  // reward and API records remain addressable.
+  await connection.query(
+    `INSERT IGNORE INTO missions
+       (id, user_id, category, mission_date, frequency, scheduled_time, title, detail,
+        difficulty, duration_minutes, reward, reward_type, reward_name, reward_key,
+        completed, completed_at, failed, failed_at, created_at, updated_at, deleted_at)
+     SELECT legacy_mission_id, user_id, 'system', mission_date, frequency, scheduled_time,
+            title, detail, difficulty, duration_minutes, reward, reward_type, reward_name,
+            reward_key, completed, completed_at, failed, failed_at, created_at, updated_at, deleted_at
+     FROM system_mission_instances
+     WHERE legacy_mission_id IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM missions WHERE missions.id = system_mission_instances.legacy_mission_id)`
+  );
+  await connection.query(
+    `INSERT IGNORE INTO missions
+       (id, user_id, category, mission_date, frequency, scheduled_time, title, detail,
+        difficulty, duration_minutes, reward, reward_type, reward_name, reward_key,
+        completed, completed_at, failed, failed_at, created_at, updated_at, deleted_at)
+     SELECT legacy_mission_id, user_id, 'personal', mission_date, frequency, scheduled_time,
+            title, detail, difficulty, duration_minutes, reward, reward_type, reward_name,
+            reward_key, completed, completed_at, failed, failed_at, created_at, updated_at, deleted_at
+     FROM personal_missions
+     WHERE legacy_mission_id IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM missions WHERE missions.id = personal_missions.legacy_mission_id)`
+  );
+  await connection.query(
+    `INSERT IGNORE INTO mission_contributions (mission_id, user_id, amount)
+     SELECT missions.id, legacy.user_id, legacy.amount
+     FROM guild_mission_contributions legacy
+     INNER JOIN guild_missions guild ON guild.id = legacy.mission_id
+     INNER JOIN missions ON missions.legacy_guild_mission_id = guild.id
+     ON DUPLICATE KEY UPDATE amount = GREATEST(mission_contributions.amount, VALUES(amount))`
+  );
+  await connection.query('DROP TABLE IF EXISTS guild_mission_contributions');
+  await connection.query('DROP TABLE IF EXISTS system_mission_instances');
+  await connection.query('DROP TABLE IF EXISTS personal_missions');
+  await connection.query('DROP TABLE IF EXISTS guild_missions');
+
   await connection.end();
   console.log('Migrasi database selesai.');
 }

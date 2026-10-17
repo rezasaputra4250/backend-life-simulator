@@ -139,20 +139,6 @@ async function getDailyStreak(userId) {
 
 async function markExpiredMissions(userId, connection = pool) {
   await connection.query(
-    `UPDATE system_mission_instances
-     SET failed = 1, failed_at = NOW(), updated_at = CURRENT_TIMESTAMP
-     WHERE user_id = ? AND mission_date = CURDATE() AND completed = 0 AND failed = 0
-       AND scheduled_time IS NOT NULL AND scheduled_time < CURTIME() AND deleted_at IS NULL`,
-    [userId]
-  );
-  await connection.query(
-    `UPDATE personal_missions
-     SET failed = 1, failed_at = NOW(), updated_at = CURRENT_TIMESTAMP
-     WHERE user_id = ? AND mission_date = CURDATE() AND completed = 0 AND failed = 0
-       AND scheduled_time IS NOT NULL AND scheduled_time < CURTIME() AND deleted_at IS NULL`,
-    [userId]
-  );
-  await connection.query(
     `UPDATE missions
      SET failed = 1, failed_at = NOW()
      WHERE user_id = ?
@@ -172,6 +158,44 @@ async function list(req, res, next) {
   try {
     await ensureCurrentMissions(req.user.id);
     await markExpiredMissions(req.user.id);
+    const [canonicalMissions] = await pool.query(
+      `SELECT missions.*
+       FROM missions
+       LEFT JOIN guild_members ON guild_members.guild_id = missions.guild_id
+         AND guild_members.user_id = ? AND guild_members.deleted_at IS NULL
+       WHERE missions.deleted_at IS NULL
+         AND ((missions.category IN ('system', 'personal') AND missions.user_id = ?)
+           OR (missions.category = 'guild' AND guild_members.user_id IS NOT NULL))
+         AND ((missions.frequency = 'daily' AND missions.mission_date = CURDATE())
+           OR (missions.frequency = 'weekly' AND missions.mission_date = DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY))
+           OR (missions.frequency = 'monthly' AND missions.mission_date = DATE_FORMAT(CURDATE(), '%Y-%m-01')))
+       ORDER BY missions.scheduled_time IS NULL ASC, missions.scheduled_time ASC, missions.id ASC`,
+      [req.user.id, req.user.id]
+    );
+    const [canonicalTodoItems] = await pool.query(
+      `SELECT todo_items.id AS todo_id, todo_items.title, todo_items.description,
+              todo_items.status, DATE_FORMAT(todo_items.due_date, '%Y-%m-%d %H:%i:%s') AS due_date,
+              todo_items.completed_at
+       FROM todo_items INNER JOIN todo_lists ON todo_lists.id = todo_items.todo_list_id
+       WHERE todo_lists.user_id = ? AND todo_lists.deleted_at IS NULL
+         AND todo_items.deleted_at IS NULL AND todo_items.status <> 'cancelled'
+       ORDER BY todo_items.due_date IS NULL ASC, todo_items.due_date ASC, todo_items.id ASC`,
+      [req.user.id]
+    );
+    const canonicalTodoMissions = canonicalTodoItems.map(formatTodoMission);
+    const canonicalCombined = canonicalMissions.map(formatMission).concat(canonicalTodoMissions).sort((left, right) => {
+      if (!left.scheduled_time && !right.scheduled_time) return Number(left.id) - Number(right.id);
+      if (!left.scheduled_time) return 1;
+      if (!right.scheduled_time) return -1;
+      return String(left.scheduled_time).localeCompare(String(right.scheduled_time));
+    });
+    return res.json({
+      message: 'Data misi berhasil diambil.',
+      missions: canonicalCombined,
+      stats: { streak_days: await getDailyStreak(req.user.id) },
+    });
+
+    // Kept below temporarily for migration compatibility and removed after legacy tables are retired.
     const [missions] = await pool.query(
       `SELECT * FROM (SELECT legacy_mission_id AS id, 'system' AS category, NULL AS guild_id,
               1 AS target_progress, 0 AS current_progress,
