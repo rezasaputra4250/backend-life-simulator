@@ -306,7 +306,7 @@ async function migrate() {
       grant_player_experience TINYINT(1) NOT NULL DEFAULT 1,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      UNIQUE KEY missions_owner_scope_title_date_unique (user_id, category, guild_id, title, mission_date),
+      UNIQUE KEY missions_owner_scope_title_date_difficulty_unique (user_id, category, guild_id, title, mission_date, difficulty),
       INDEX missions_user_id_completed_index (user_id, completed),
       INDEX missions_guild_status_index (guild_id, status),
       CONSTRAINT missions_user_id_foreign
@@ -1132,9 +1132,12 @@ async function migrate() {
   if (missionIndexNames.includes('missions_user_id_title_date_unique')) {
     await connection.query('ALTER TABLE missions DROP INDEX missions_user_id_title_date_unique');
   }
-  if (!missionIndexNames.includes('missions_owner_scope_title_date_unique')) {
+  if (missionIndexNames.includes('missions_owner_scope_title_date_unique')) {
+    await connection.query('ALTER TABLE missions DROP INDEX missions_owner_scope_title_date_unique');
+  }
+  if (!missionIndexNames.includes('missions_owner_scope_title_date_difficulty_unique')) {
     await connection.query(
-      'ALTER TABLE missions ADD UNIQUE KEY missions_owner_scope_title_date_unique (user_id, category, guild_id, title, mission_date)'
+      'ALTER TABLE missions ADD UNIQUE KEY missions_owner_scope_title_date_difficulty_unique (user_id, category, guild_id, title, mission_date, difficulty)'
     );
   }
 

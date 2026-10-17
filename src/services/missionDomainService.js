@@ -47,11 +47,12 @@ async function ensureSystemMission(connection, userId, difficulty, seed) {
   const [rows] = await connection.query(
     `SELECT id FROM missions
      WHERE user_id = ? AND category = 'system' AND title = ? AND frequency = ?
+       AND difficulty = ?
        AND mission_date = CASE ? WHEN 'daily' THEN CURDATE()
          WHEN 'weekly' THEN DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)
          ELSE DATE_FORMAT(CURDATE(), '%Y-%m-01') END
        AND deleted_at IS NULL LIMIT 1 FOR UPDATE`,
-    [userId, seed.title, frequency, frequency]
+    [userId, seed.title, frequency, difficulty || 'easy', frequency]
   );
   if (rows.length) return rows[0].id;
   return createMission(connection, {
