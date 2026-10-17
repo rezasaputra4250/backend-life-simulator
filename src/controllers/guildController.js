@@ -216,7 +216,7 @@ async function invite(req, res, next) {
     const targetId = Number(req.body.user_id);
     if (targetId === Number(req.user.id)) return res.status(422).json({ message: 'Kamu sudah menjadi pemilik guild.' });
     const [friendships] = await pool.query(
-      `SELECT id FROM friendships WHERE user_one_id = ? AND user_two_id = ? LIMIT 1`,
+      `SELECT id FROM friendships WHERE user_one_id = ? AND user_two_id = ? AND deleted_at IS NULL LIMIT 1`,
       [Math.min(req.user.id, targetId), Math.max(req.user.id, targetId)]
     );
     if (!friendships.length) return res.status(403).json({ message: 'Kamu hanya dapat mengundang teman.' });

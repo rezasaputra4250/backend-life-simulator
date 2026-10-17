@@ -470,7 +470,8 @@ async function cancel(req, res, next) {
           [amount, amount, amount, req.user.id]
         );
         await connection.query(
-          `DELETE FROM user_experience_logs
+          `UPDATE user_experience_logs
+           SET deleted_at = CURRENT_TIMESTAMP
            WHERE id = (
              SELECT id FROM (
                SELECT id FROM user_experience_logs
@@ -510,7 +511,7 @@ async function cancel(req, res, next) {
       }
 
       if (reward) {
-        await connection.query('DELETE FROM user_rewards WHERE id = ?', [reward.id]);
+        await connection.query('UPDATE user_rewards SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL', [reward.id]);
       }
       await connection.query(
         `UPDATE missions

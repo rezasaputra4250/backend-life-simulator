@@ -25,7 +25,7 @@ function validationErrorResponse(req, res) {
 async function getOrCreateTodoList(userId) {
   const [lists] = await pool.query(
     `SELECT id FROM todo_lists
-     WHERE user_id = ?
+     WHERE user_id = ? AND deleted_at IS NULL
      ORDER BY id ASC
      LIMIT 1`,
     [userId]
@@ -48,7 +48,7 @@ async function list(req, res, next) {
       `SELECT id, todo_list_id, title, description, status, priority,
               DATE_FORMAT(due_date, '%Y-%m-%d %H:%i:%s') AS due_date, completed_at, sort_order, created_at, updated_at
        FROM todo_items
-       WHERE todo_list_id = ?
+       WHERE todo_list_id = ? AND deleted_at IS NULL
        ORDER BY due_date IS NULL ASC, due_date ASC, sort_order ASC, id ASC`,
       [listId]
     );
@@ -79,7 +79,7 @@ async function create(req, res, next) {
     const [items] = await pool.query(
       `SELECT id, todo_list_id, title, description, status, priority,
               DATE_FORMAT(due_date, '%Y-%m-%d %H:%i:%s') AS due_date, completed_at, sort_order, created_at, updated_at
-       FROM todo_items WHERE id = ? LIMIT 1`,
+       FROM todo_items WHERE id = ? AND deleted_at IS NULL LIMIT 1`,
       [result.insertId]
     );
 
@@ -114,7 +114,7 @@ async function update(req, res, next) {
 
     const listId = await getOrCreateTodoList(req.user.id);
     const [existingItems] = await pool.query(
-      'SELECT id FROM todo_items WHERE id = ? AND todo_list_id = ? LIMIT 1',
+      'SELECT id FROM todo_items WHERE id = ? AND todo_list_id = ? AND deleted_at IS NULL LIMIT 1',
       [req.params.id, listId]
     );
 
@@ -138,7 +138,7 @@ async function update(req, res, next) {
     const [items] = await pool.query(
       `SELECT id, todo_list_id, title, description, status, priority,
               DATE_FORMAT(due_date, '%Y-%m-%d %H:%i:%s') AS due_date, completed_at, sort_order, created_at, updated_at
-       FROM todo_items WHERE id = ? LIMIT 1`,
+       FROM todo_items WHERE id = ? AND deleted_at IS NULL LIMIT 1`,
       [req.params.id]
     );
 
@@ -155,7 +155,7 @@ async function remove(req, res, next) {
   try {
     const listId = await getOrCreateTodoList(req.user.id);
     const [result] = await pool.query(
-      'DELETE FROM todo_items WHERE id = ? AND todo_list_id = ?',
+      'UPDATE todo_items SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND todo_list_id = ? AND deleted_at IS NULL',
       [req.params.id, listId]
     );
 

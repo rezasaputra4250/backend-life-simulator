@@ -540,6 +540,58 @@ async function migrate() {
     );
   `);
 
+  // Keep timestamps and soft deletes consistent for new and existing tables.
+  const managedTables = [
+    'roles', 'companies', 'users', 'user_profiles', 'affiliate_referrals',
+    'friend_requests', 'friendships', 'parties', 'party_members', 'guilds',
+    'guild_members', 'guild_invitations', 'password_resets', 'user_stats',
+    'user_experience_logs', 'missions', 'user_rewards', 'user_inventory',
+    'user_badges', 'skills', 'user_skills', 'todo_lists', 'todo_items',
+    'player_classes', 'player_class_progressions', 'user_classes',
+    'mission_templates', 'notifications', 'notification_preferences',
+    'reward_transactions', 'guild_missions', 'guild_mission_contributions',
+    'mission_contributions',
+  ];
+
+  for (const tableName of managedTables) {
+    const [columns] = await connection.query(
+      `SELECT COLUMN_NAME
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
+         AND COLUMN_NAME IN ('created_at', 'updated_at', 'deleted_at')`,
+      [env.database.name, tableName]
+    );
+    const columnNames = columns.map((column) => column.COLUMN_NAME);
+
+    if (!columnNames.includes('created_at')) {
+      await connection.query(
+        `ALTER TABLE \`${tableName}\` ADD COLUMN created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP`
+      );
+    }
+    if (!columnNames.includes('updated_at')) {
+      await connection.query(
+        `ALTER TABLE \`${tableName}\` ADD COLUMN updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`
+      );
+    }
+    if (!columnNames.includes('deleted_at')) {
+      await connection.query(
+        `ALTER TABLE \`${tableName}\` ADD COLUMN deleted_at TIMESTAMP NULL DEFAULT NULL`
+      );
+    }
+
+    const [deletedAtIndexes] = await connection.query(
+      `SELECT DISTINCT INDEX_NAME
+       FROM INFORMATION_SCHEMA.STATISTICS
+       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?`,
+      [env.database.name, tableName, `${tableName}_deleted_at_index`]
+    );
+    if (!deletedAtIndexes.length) {
+      await connection.query(
+        `ALTER TABLE \`${tableName}\` ADD INDEX \`${tableName}_deleted_at_index\` (deleted_at)`
+      );
+    }
+  }
+
   const [missionExtraColumns] = await connection.query(
     `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
      WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'missions'

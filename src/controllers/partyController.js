@@ -14,7 +14,7 @@ function validationErrorResponse(req, res) {
 async function areFriends(userA, userB) {
   const [userOneId, userTwoId] = [Math.min(Number(userA), Number(userB)), Math.max(Number(userA), Number(userB))];
   const [rows] = await pool.query(
-    'SELECT id FROM friendships WHERE user_one_id = ? AND user_two_id = ? LIMIT 1',
+    'SELECT id FROM friendships WHERE user_one_id = ? AND user_two_id = ? AND deleted_at IS NULL LIMIT 1',
     [userOneId, userTwoId]
   );
   return rows.length > 0;
@@ -27,7 +27,8 @@ async function list(req, res, next) {
               parties.created_at, COUNT(party_members.id) AS member_count
        FROM parties
        INNER JOIN party_members ON party_members.party_id = parties.id
-       WHERE party_members.user_id = ?
+       WHERE parties.deleted_at IS NULL AND party_members.deleted_at IS NULL
+         AND party_members.user_id = ?
        GROUP BY parties.id
        ORDER BY parties.updated_at DESC`,
       [req.user.id]
@@ -36,8 +37,10 @@ async function list(req, res, next) {
       `SELECT party_members.party_id, users.id, users.name, users.email, party_members.role
        FROM party_members
        INNER JOIN users ON users.id = party_members.user_id
-       WHERE party_members.party_id IN (
-         SELECT party_id FROM party_members WHERE user_id = ?
+       WHERE party_members.deleted_at IS NULL
+         AND users.deleted_at IS NULL
+         AND party_members.party_id IN (
+         SELECT party_id FROM party_members WHERE user_id = ? AND deleted_at IS NULL
        )
        ORDER BY users.name ASC`,
       [req.user.id]
@@ -101,7 +104,7 @@ async function addMember(req, res, next) {
       return res.status(422).json({ message: 'Anggota party harus sudah menjadi teman.' });
     }
 
-    const [members] = await pool.query('SELECT COUNT(*) AS total FROM party_members WHERE party_id = ?', [req.params.id]);
+    const [members] = await pool.query('SELECT COUNT(*) AS total FROM party_members WHERE party_id = ? AND deleted_at IS NULL', [req.params.id]);
     if (Number(members[0].total) >= parties[0].max_members) {
       return res.status(409).json({ message: 'Party sudah penuh.' });
     }
@@ -127,7 +130,7 @@ async function removeMember(req, res, next) {
     const [parties] = await pool.query('SELECT id FROM parties WHERE id = ? AND owner_id = ? LIMIT 1', [req.params.id, req.user.id]);
     if (!parties.length) return res.status(404).json({ message: 'Party tidak ditemukan atau kamu bukan pemiliknya.' });
     const [result] = await pool.query(
-      "DELETE FROM party_members WHERE party_id = ? AND user_id = ? AND role = 'member'",
+      "UPDATE party_members SET deleted_at = CURRENT_TIMESTAMP WHERE party_id = ? AND user_id = ? AND role = 'member' AND deleted_at IS NULL",
       [req.params.id, req.params.userId]
     );
     if (!result.affectedRows) return res.status(404).json({ message: 'Anggota party tidak ditemukan.' });

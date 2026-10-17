@@ -24,7 +24,8 @@ async function list(req, res, next) {
          WHEN friendships.user_one_id = ? THEN friendships.user_two_id
          ELSE friendships.user_one_id
        END
-       WHERE friendships.user_one_id = ? OR friendships.user_two_id = ?
+       WHERE friendships.deleted_at IS NULL
+         AND (friendships.user_one_id = ? OR friendships.user_two_id = ?)
        ORDER BY users.name ASC`,
       [req.user.id, req.user.id, req.user.id]
     );
@@ -57,7 +58,8 @@ async function search(req, res, next) {
               CASE
                 WHEN EXISTS (
                   SELECT 1 FROM friendships
-                  WHERE (friendships.user_one_id = LEAST(?, users.id)
+                  WHERE friendships.deleted_at IS NULL
+                    AND (friendships.user_one_id = LEAST(?, users.id)
                      AND friendships.user_two_id = GREATEST(?, users.id))
                 ) THEN 'friends'
                 WHEN EXISTS (
@@ -118,7 +120,7 @@ async function request(req, res, next) {
 
     const [userOneId, userTwoId] = pair(req.user.id, targetId);
     const [friendships] = await connection.query(
-      'SELECT id FROM friendships WHERE user_one_id = ? AND user_two_id = ? LIMIT 1',
+      'SELECT id FROM friendships WHERE user_one_id = ? AND user_two_id = ? AND deleted_at IS NULL LIMIT 1',
       [userOneId, userTwoId]
     );
     if (friendships.length) {
@@ -231,7 +233,7 @@ async function remove(req, res, next) {
   try {
     const [userOneId, userTwoId] = pair(req.user.id, req.params.userId);
     const [result] = await pool.query(
-      'DELETE FROM friendships WHERE user_one_id = ? AND user_two_id = ?',
+      'UPDATE friendships SET deleted_at = CURRENT_TIMESTAMP WHERE user_one_id = ? AND user_two_id = ? AND deleted_at IS NULL',
       [userOneId, userTwoId]
     );
     if (!result.affectedRows) return res.status(404).json({ message: 'Pertemanan tidak ditemukan.' });
