@@ -69,6 +69,8 @@ async function grantExperience(connection, userId, amount, source, description, 
 async function getProgression(userId) {
   const [rows] = await pool.query(
     `SELECT stats.level, stats.experience, stats.experience_to_next_level,
+            stats.health_points, stats.mana_points, stats.strength, stats.intelligence,
+            stats.agility, stats.stamina, stats.luck,
             classes.id AS class_id, classes.name AS class_name, classes.label AS class_label,
             classes.description AS class_description, classes.primary_stat,
             classes.strength_bonus, classes.intelligence_bonus, classes.agility_bonus,
