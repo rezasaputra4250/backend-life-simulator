@@ -7,9 +7,17 @@ const { recordMissionReward, reverseMissionExperience } = require('../services/r
 const { ensureSystemMission, syncMissionStatus } = require('../services/missionDomainService');
 
 async function ensureCurrentMissions(userId, connection = pool) {
-  const [userRows] = await connection.query('SELECT difficulty FROM users WHERE id = ? LIMIT 1', [userId]);
+  const [userRows] = await connection.query(
+    `SELECT users.difficulty, player_classes.name AS class_name
+     FROM users
+     LEFT JOIN player_classes ON player_classes.id = users.class_id AND player_classes.deleted_at IS NULL
+     WHERE users.id = ? LIMIT 1`,
+    [userId]
+  );
   const difficulty = userRows[0]?.difficulty || 'easy';
+  const className = userRows[0]?.class_name || null;
   for (const mission of allMissionSeeds) {
+    if (mission.required_class && mission.required_class !== className) continue;
     await ensureSystemMission(connection, userId, difficulty, mission);
   }
 }
@@ -139,19 +147,28 @@ async function list(req, res, next) {
   try {
     await ensureCurrentMissions(req.user.id);
     await markExpiredMissions(req.user.id);
+    const [userRows] = await pool.query(
+      `SELECT player_classes.name AS class_name
+       FROM users
+       LEFT JOIN player_classes ON player_classes.id = users.class_id AND player_classes.deleted_at IS NULL
+       WHERE users.id = ? LIMIT 1`,
+      [req.user.id]
+    );
+    const className = userRows[0]?.class_name || null;
     const [canonicalMissions] = await pool.query(
       `SELECT missions.*
        FROM missions
        LEFT JOIN guild_members ON guild_members.guild_id = missions.guild_id
          AND guild_members.user_id = ? AND guild_members.deleted_at IS NULL
        WHERE missions.deleted_at IS NULL
+         AND (missions.required_class IS NULL OR missions.required_class = ?)
          AND ((missions.category IN ('system', 'personal') AND missions.user_id = ?)
            OR (missions.category = 'guild' AND guild_members.user_id IS NOT NULL))
          AND ((missions.frequency = 'daily' AND missions.mission_date = CURDATE())
            OR (missions.frequency = 'weekly' AND missions.mission_date = DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY))
            OR (missions.frequency = 'monthly' AND missions.mission_date = DATE_FORMAT(CURDATE(), '%Y-%m-01')))
        ORDER BY missions.scheduled_time IS NULL ASC, missions.scheduled_time ASC, missions.id ASC`,
-      [req.user.id, req.user.id]
+      [className, req.user.id, req.user.id]
     );
     const canonicalCombined = canonicalMissions.map(formatMission).sort((left, right) => {
       if (!left.scheduled_time && !right.scheduled_time) return Number(left.id) - Number(right.id);

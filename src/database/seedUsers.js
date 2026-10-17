@@ -110,6 +110,7 @@ async function seedUsers() {
     await ensureUserSkills(pool, user.id, classRows[0]?.name);
 
     for (const mission of allMissionSeeds) {
+      if (mission.required_class && mission.required_class !== classRows[0]?.name) continue;
       await ensureSystemMission(pool, user.id, user.difficulty || 'easy', {
         ...mission,
         frequency: mission.frequency || 'daily',

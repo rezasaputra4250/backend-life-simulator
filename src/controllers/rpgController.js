@@ -1,7 +1,9 @@
 const { validationResult } = require('express-validator');
 const pool = require('../config/database');
+const { allMissionSeeds } = require('../constants/missions');
 const { getProgression, experienceForLevel, levelForExperience } = require('../services/progressionService');
 const { ensureUserSkills } = require('../services/userSkillService');
+const { ensureSystemMission } = require('../services/missionDomainService');
 
 function invalid(req, res) {
   const errors = validationResult(req);
@@ -88,6 +90,14 @@ async function selectClass(req, res, next) {
         ]
       );
       await ensureUserSkills(connection, req.user.id, chosen.name);
+      const [userDifficulty] = await connection.query(
+        'SELECT difficulty FROM users WHERE id = ? LIMIT 1',
+        [req.user.id]
+      );
+      for (const mission of allMissionSeeds) {
+        if (mission.required_class && mission.required_class !== chosen.name) continue;
+        await ensureSystemMission(connection, req.user.id, userDifficulty[0]?.difficulty || 'easy', mission);
+      }
       await connection.commit();
     } catch (error) { await connection.rollback(); throw error; } finally { connection.release(); }
     res.status(200).json({ message: 'Class karakter berhasil diperbarui.', data: chosen });

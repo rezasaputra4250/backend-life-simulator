@@ -14,13 +14,13 @@ async function createMission(connection, mission) {
   const [result] = await connection.query(
     `INSERT INTO missions
        (user_id, category, guild_id, mission_date, frequency, scheduled_time,
-        title, detail, difficulty, duration_minutes, target_progress, current_progress,
+        title, detail, difficulty, required_class, duration_minutes, target_progress, current_progress,
         status, reward, reward_type, reward_name, reward_key, custom_source,
         grant_player_experience)
-     VALUES (?, ?, ?, COALESCE(?, CURDATE()), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, COALESCE(?, CURDATE()), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [mission.user_id, mission.category, mission.guild_id || null, mission.mission_date || null,
       mission.frequency || 'daily', mission.scheduled_time || null, mission.title,
-      mission.detail || null, mission.difficulty || 'easy', mission.duration_minutes || 15,
+      mission.detail || null, mission.difficulty || 'easy', mission.required_class || null, mission.duration_minutes || 15,
       mission.target_progress || 1, mission.current_progress || 0, mission.status || 'active',
       mission.reward || 0, mission.reward_type || 'xp', mission.reward_name || null,
       mission.reward_key || null, mission.custom_source ? 1 : 0,
@@ -44,15 +44,19 @@ async function ensureSystemMission(connection, userId, difficulty, seed) {
         return date.toISOString().slice(0, 10);
       })()
       : `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01`;
+  const requiredClass = seed.required_class || null;
+  const classCondition = requiredClass ? 'required_class = ?' : 'required_class IS NULL';
   const [rows] = await connection.query(
     `SELECT id FROM missions
      WHERE user_id = ? AND category = 'system' AND title = ? AND frequency = ?
-       AND difficulty = ?
+       AND difficulty = ? AND ${classCondition}
        AND mission_date = CASE ? WHEN 'daily' THEN CURDATE()
          WHEN 'weekly' THEN DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)
          ELSE DATE_FORMAT(CURDATE(), '%Y-%m-01') END
        AND deleted_at IS NULL LIMIT 1 FOR UPDATE`,
-    [userId, seed.title, frequency, difficulty || 'easy', frequency]
+    requiredClass
+      ? [userId, seed.title, frequency, difficulty || 'easy', requiredClass, frequency]
+      : [userId, seed.title, frequency, difficulty || 'easy', frequency]
   );
   if (rows.length) return rows[0].id;
   return createMission(connection, {
@@ -64,6 +68,7 @@ async function ensureSystemMission(connection, userId, difficulty, seed) {
     title: seed.title,
     detail: seed.detail,
     difficulty,
+    required_class: seed.required_class,
     duration_minutes: seed.duration_minutes,
     reward: seed.reward,
     reward_type: seed.reward_type,

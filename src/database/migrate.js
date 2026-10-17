@@ -296,6 +296,8 @@ async function migrate() {
       scheduled_time TIME NULL,
       title VARCHAR(180) NOT NULL,
       detail VARCHAR(255) NULL,
+      difficulty ENUM('easy', 'normal', 'hard', 'expert') NOT NULL DEFAULT 'easy',
+      required_class VARCHAR(80) NULL,
       reward INT UNSIGNED NOT NULL DEFAULT 0,
       reward_type ENUM('xp', 'skill', 'item', 'badge') NOT NULL DEFAULT 'xp',
       reward_name VARCHAR(160) NULL,
@@ -307,7 +309,7 @@ async function migrate() {
       grant_player_experience TINYINT(1) NOT NULL DEFAULT 1,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      UNIQUE KEY missions_owner_scope_title_date_difficulty_unique (user_id, category, guild_id, title, mission_date, difficulty),
+      UNIQUE KEY missions_owner_scope_title_date_difficulty_unique (user_id, category, guild_id, title, mission_date, difficulty, required_class),
       INDEX missions_user_id_completed_index (user_id, completed),
       INDEX missions_guild_status_index (guild_id, status),
       CONSTRAINT missions_user_id_foreign
@@ -1011,7 +1013,7 @@ async function migrate() {
      FROM INFORMATION_SCHEMA.COLUMNS
      WHERE TABLE_SCHEMA = ?
        AND TABLE_NAME = 'missions'
-       AND COLUMN_NAME IN ('category', 'mission_date', 'frequency', 'scheduled_time', 'reward_type', 'reward_name', 'reward_key', 'failed', 'failed_at')`,
+       AND COLUMN_NAME IN ('category', 'mission_date', 'frequency', 'scheduled_time', 'reward_type', 'reward_name', 'reward_key', 'failed', 'failed_at', 'required_class')`,
     [env.database.name]
   );
   const missionColumnNames = missionColumns.map((column) => column.COLUMN_NAME);
@@ -1020,6 +1022,10 @@ async function migrate() {
     await connection.query(
       "ALTER TABLE missions ADD COLUMN category ENUM('system', 'personal', 'guild') NOT NULL DEFAULT 'system' AFTER user_id"
     );
+  }
+
+  if (!missionColumnNames.includes('required_class')) {
+    await connection.query('ALTER TABLE missions ADD COLUMN required_class VARCHAR(80) NULL AFTER difficulty');
   }
 
   const [sharedMissionColumns] = await connection.query(
@@ -1136,11 +1142,12 @@ async function migrate() {
   if (missionIndexNames.includes('missions_owner_scope_title_date_unique')) {
     await connection.query('ALTER TABLE missions DROP INDEX missions_owner_scope_title_date_unique');
   }
-  if (!missionIndexNames.includes('missions_owner_scope_title_date_difficulty_unique')) {
-    await connection.query(
-      'ALTER TABLE missions ADD UNIQUE KEY missions_owner_scope_title_date_difficulty_unique (user_id, category, guild_id, title, mission_date, difficulty)'
-    );
+  if (missionIndexNames.includes('missions_owner_scope_title_date_difficulty_unique')) {
+    await connection.query('ALTER TABLE missions DROP INDEX missions_owner_scope_title_date_difficulty_unique');
   }
+  await connection.query(
+    'ALTER TABLE missions ADD UNIQUE KEY missions_owner_scope_title_date_difficulty_unique (user_id, category, guild_id, title, mission_date, difficulty, required_class)'
+  );
 
   await connection.query(
     `INSERT IGNORE INTO missions
@@ -1403,6 +1410,7 @@ async function migrate() {
   for (const user of activeUsers) {
     await ensureUserSkills(connection, user.id, user.class_name);
     for (const mission of require('../constants/missions').allMissionSeeds) {
+      if (mission.required_class && mission.required_class !== user.class_name) continue;
       await ensureSystemMission(connection, user.id, user.difficulty || 'easy', {
         ...mission,
         frequency: mission.frequency || 'daily',
