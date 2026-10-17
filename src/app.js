@@ -10,6 +10,7 @@ const affiliateRoutes = require('./routes/affiliateRoutes');
 const friendRoutes = require('./routes/friendRoutes');
 const partyRoutes = require('./routes/partyRoutes');
 const guildRoutes = require('./routes/guildRoutes');
+const financeRoutes = require('./routes/financeRoutes');
 const v1Routes = require('./routes/v1Routes');
 
 const app = express();
@@ -38,6 +39,7 @@ app.use('/api/affiliate', affiliateRoutes);
 app.use('/api/friends', friendRoutes);
 app.use('/api/parties', partyRoutes);
 app.use('/api/guilds', guildRoutes);
+app.use('/api/finance', financeRoutes);
 
 app.use((req, res) => {
   res.status(404).json({

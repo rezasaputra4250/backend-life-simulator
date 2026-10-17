@@ -617,6 +617,34 @@ async function migrate() {
       INDEX personal_missions_user_date_index (user_id, mission_date),
       CONSTRAINT personal_missions_user_foreign FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS financial_wallets (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      user_id BIGINT UNSIGNED NOT NULL UNIQUE,
+      balance BIGINT NOT NULL DEFAULT 0,
+      currency CHAR(3) NOT NULL DEFAULT 'IDR',
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      CONSTRAINT financial_wallets_user_foreign FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS financial_transactions (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      wallet_id BIGINT UNSIGNED NOT NULL,
+      user_id BIGINT UNSIGNED NOT NULL,
+      type ENUM('income', 'expense') NOT NULL,
+      amount BIGINT UNSIGNED NOT NULL,
+      balance_after BIGINT NOT NULL,
+      category VARCHAR(80) NOT NULL,
+      description VARCHAR(255) NULL,
+      occurred_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX financial_transactions_user_date_index (user_id, occurred_at),
+      INDEX financial_transactions_wallet_index (wallet_id),
+      CONSTRAINT financial_transactions_wallet_foreign FOREIGN KEY (wallet_id) REFERENCES financial_wallets(id) ON DELETE CASCADE,
+      CONSTRAINT financial_transactions_user_foreign FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
   `);
 
   // The legacy to-do module has been replaced by the unified missions domain.
@@ -636,6 +664,7 @@ async function migrate() {
     'reward_transactions', 'difficulty_configs', 'difficulty_level_experiences', 'experience_transactions',
     'guild_missions', 'guild_mission_contributions', 'mission_contributions',
     'system_mission_instances', 'personal_missions',
+    'financial_wallets', 'financial_transactions',
   ];
 
   for (const tableName of managedTables) {
@@ -676,6 +705,14 @@ async function migrate() {
       );
     }
   }
+
+  await connection.query(
+    `INSERT INTO financial_wallets (user_id)
+     SELECT users.id
+     FROM users
+     LEFT JOIN financial_wallets ON financial_wallets.user_id = users.id
+     WHERE financial_wallets.id IS NULL`
+  );
 
   const [difficultyExperienceColumns] = await connection.query(
     `SELECT COLUMN_TYPE

@@ -6,6 +6,7 @@ const affiliateRoutes = require('./affiliateRoutes');
 const friendRoutes = require('./friendRoutes');
 const partyRoutes = require('./partyRoutes');
 const guildRoutes = require('./guildRoutes');
+const financeRoutes = require('./financeRoutes');
 
 const router = express.Router();
 
@@ -17,5 +18,6 @@ router.use('/affiliate', affiliateRoutes);
 router.use('/friends', friendRoutes);
 router.use('/parties', partyRoutes);
 router.use('/guilds', guildRoutes);
+router.use('/finance', financeRoutes);
 
 module.exports = router;
