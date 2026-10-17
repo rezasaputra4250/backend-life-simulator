@@ -114,6 +114,14 @@ async function difficultyConfigs(req, res, next) {
 async function updateDifficulty(req, res, next) {
   try {
     if (invalid(req, res)) return;
+    const [users] = await pool.query(
+      'SELECT difficulty FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1',
+      [req.user.id]
+    );
+    if (!users.length) return res.status(404).json({ message: 'Pengguna tidak ditemukan.' });
+    if (users[0].difficulty === req.body.difficulty) {
+      return res.json({ message: 'Difficulty sudah digunakan.', data: { difficulty: req.body.difficulty } });
+    }
     const [result] = await pool.query(
       'UPDATE users SET difficulty = ? WHERE id = ? AND deleted_at IS NULL',
       [req.body.difficulty, req.user.id]
