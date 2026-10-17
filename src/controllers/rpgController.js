@@ -32,12 +32,28 @@ async function selectClass(req, res, next) {
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction();
-      const [existing] = await connection.query('SELECT user_id FROM user_classes WHERE user_id = ? AND deleted_at IS NULL LIMIT 1 FOR UPDATE', [req.user.id]);
-      if (existing.length) {
+      const [existing] = await connection.query(
+        'SELECT user_id, class_id, deleted_at FROM user_classes WHERE user_id = ? LIMIT 1 FOR UPDATE',
+        [req.user.id]
+      );
+      if (existing.length && existing[0].deleted_at === null && Number(existing[0].class_id) === Number(chosen.id)) {
         await connection.rollback();
-        return res.status(409).json({ message: 'Class karakter sudah dipilih.' });
+        return res.status(200).json({ message: 'Class karakter sudah dipilih sebelumnya.', data: chosen });
       }
-      await connection.query('INSERT INTO user_classes (user_id, class_id) VALUES (?, ?)', [req.user.id, chosen.id]);
+      if (existing.length && existing[0].deleted_at === null) {
+        await connection.rollback();
+        return res.status(409).json({ message: 'Class karakter sudah dipilih. Class tidak dapat diganti.' });
+      }
+      if (existing.length) {
+        await connection.query(
+          `UPDATE user_classes
+           SET class_id = ?, deleted_at = NULL, updated_at = CURRENT_TIMESTAMP
+           WHERE user_id = ?`,
+          [chosen.id, req.user.id]
+        );
+      } else {
+        await connection.query('INSERT INTO user_classes (user_id, class_id) VALUES (?, ?)', [req.user.id, chosen.id]);
+      }
       await connection.query(
         `UPDATE user_stats SET strength = strength + ?, intelligence = intelligence + ?, agility = agility + ?,
          stamina = stamina + ?, luck = luck + ? WHERE user_id = ?`,
