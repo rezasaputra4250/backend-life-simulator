@@ -81,43 +81,55 @@ async function createMission(req, res, next) {
   try {
     const errorResponse = validationErrorResponse(req, res);
     if (errorResponse) return errorResponse;
-    const [guilds] = await pool.query(
-      'SELECT id FROM guilds WHERE id = ? AND owner_id = ? AND deleted_at IS NULL LIMIT 1',
-      [req.params.id, req.user.id]
-    );
-    if (!guilds.length) return res.status(404).json({ message: 'Guild tidak ditemukan atau kamu bukan pemiliknya.' });
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      const [guilds] = await connection.query(
+        'SELECT id FROM guilds WHERE id = ? AND owner_id = ? AND deleted_at IS NULL LIMIT 1 FOR UPDATE',
+        [req.params.id, req.user.id]
+      );
+      if (!guilds.length) {
+        await connection.rollback();
+        return res.status(404).json({ message: 'Guild tidak ditemukan atau kamu bukan pemiliknya.' });
+      }
 
-    const difficulty = ['easy', 'normal', 'hard', 'expert'].includes(req.body.difficulty) ? req.body.difficulty : 'easy';
-    const [difficultyRows] = await pool.query(
-      'SELECT base_reward_xp FROM difficulty_configs WHERE difficulty = ? AND is_active = 1 AND deleted_at IS NULL LIMIT 1',
-      [difficulty]
-    );
-    const rewardXp = Number(difficultyRows[0]?.base_reward_xp || 5);
-    const grantPlayerExperience = req.body.grant_player_experience === true;
-    const [result] = await pool.query(
-      `INSERT INTO missions
-       (user_id, category, guild_id, mission_date, frequency, scheduled_time, title, detail, difficulty,
-        target_progress, current_progress, status, reward, reward_type, reward_name, reward_key, custom_source, grant_player_experience)
-       VALUES (?, 'guild', ?, ?, 'daily', ?, ?, ?, ?, ?, 0, 'active', ?, 'xp', ?, 'xp', 1, ?)`,
-      [req.user.id, req.params.id, req.body.mission_date, req.body.scheduled_time || null, req.body.title, req.body.detail || null, difficulty,
-        req.body.target_progress || 1, rewardXp,
-        `${rewardXp} XP untuk kontribusi`, grantPlayerExperience]
-    );
-    await pool.query(
-      `INSERT INTO notifications (user_id, type, title, body, data)
-       SELECT guild_members.user_id, 'guild_mission', 'Misi guild baru', ?, JSON_OBJECT('guild_id', ?, 'mission_id', ?)
-       FROM guild_members WHERE guild_members.guild_id = ? AND guild_members.user_id <> ? AND guild_members.deleted_at IS NULL`,
-      [`Guild memiliki misi baru: ${req.body.title}.`, req.params.id, result.insertId, req.params.id, req.user.id]
-    );
-    const [missions] = await pool.query(
-      `SELECT id, guild_id, user_id, user_id AS creator_id, title, detail, difficulty,
-              target_progress, current_progress, reward, reward AS reward_xp, grant_player_experience, scheduled_time,
-              DATE_FORMAT(mission_date, '%Y-%m-%d') AS mission_date, status, completed_at
-       FROM missions WHERE id = ? AND deleted_at IS NULL`,
-      [result.insertId]
-    );
-    if (missions[0]) await registerGuildMission(pool, result.insertId, missions[0]);
-    return res.status(201).json({ message: 'Misi guild berhasil dibuat.', data: missions[0] });
+      const difficulty = ['easy', 'normal', 'hard', 'expert'].includes(req.body.difficulty) ? req.body.difficulty : 'easy';
+      const [difficultyRows] = await connection.query(
+        'SELECT base_reward_xp FROM difficulty_configs WHERE difficulty = ? AND is_active = 1 AND deleted_at IS NULL LIMIT 1',
+        [difficulty]
+      );
+      const rewardXp = Number(difficultyRows[0]?.base_reward_xp || 5);
+      const grantPlayerExperience = req.body.grant_player_experience === true;
+      const [result] = await connection.query(
+        `INSERT INTO missions
+         (user_id, category, guild_id, mission_date, frequency, scheduled_time, title, detail, difficulty,
+          target_progress, current_progress, status, reward, reward_type, reward_name, reward_key, custom_source, grant_player_experience)
+         VALUES (?, 'guild', ?, ?, 'daily', ?, ?, ?, ?, ?, 0, 'active', ?, 'xp', ?, 'xp', 1, ?)`,
+        [req.user.id, req.params.id, req.body.mission_date, req.body.scheduled_time || null, req.body.title, req.body.detail || null, difficulty,
+          req.body.target_progress || 1, rewardXp, `${rewardXp} XP untuk kontribusi`, grantPlayerExperience]
+      );
+      await connection.query(
+        `INSERT INTO notifications (user_id, type, title, body, data)
+         SELECT guild_members.user_id, 'guild_mission', 'Misi guild baru', ?, JSON_OBJECT('guild_id', ?, 'mission_id', ?)
+         FROM guild_members WHERE guild_members.guild_id = ? AND guild_members.user_id <> ? AND guild_members.deleted_at IS NULL`,
+        [`Guild memiliki misi baru: ${req.body.title}.`, req.params.id, result.insertId, req.params.id, req.user.id]
+      );
+      const [missions] = await connection.query(
+        `SELECT id, guild_id, user_id, user_id AS creator_id, title, detail, difficulty,
+                target_progress, current_progress, reward, reward AS reward_xp, grant_player_experience, scheduled_time,
+                DATE_FORMAT(mission_date, '%Y-%m-%d') AS mission_date, status, completed_at
+         FROM missions WHERE id = ? AND deleted_at IS NULL`,
+        [result.insertId]
+      );
+      if (missions[0]) await registerGuildMission(connection, result.insertId, missions[0]);
+      await connection.commit();
+      return res.status(201).json({ message: 'Misi guild berhasil dibuat.', data: missions[0] });
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
   } catch (error) { return next(error); }
 }
 
