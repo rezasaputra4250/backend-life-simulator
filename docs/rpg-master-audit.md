@@ -20,11 +20,6 @@ Dokumen ini mencatat status implementasi backend terhadap master prompt. Audit d
 - Query aktif pada jalur RPG utama memfilter `deleted_at IS NULL`.
 - Endpoint existing `/missions`, `/guilds`, `/me`, dan progression tetap dipertahankan.
 
-## Tahap backend berikutnya
-
-- Menyelesaikan dual-write transaction untuk System Mission refresh dan seluruh jalur legacy write yang masih tersisa.
-- Menambah integration test runtime untuk migration idempotency, concurrent completion, soft delete, dan explicit guild EXP.
-
 ## Domain tables
 
 - `system_mission_instances` menyimpan instance System Mission per user.
@@ -47,3 +42,4 @@ Regression test backend lulus 8/8 menggunakan Node.js absolut dari `C:\\Program 
 Expo lint dan TypeScript check mobile lulus.
 Migration berhasil dijalankan dua kali berturut-turut pada database development lokal tanpa error.
 Audit database development menunjukkan seluruh active `system`, `personal`, dan `guild` projection memiliki domain mapping (`0` missing mapping).
+Uji integrasi runtime pada database sementara lulus: concurrent completion menghasilkan satu reward, guild contribution default menghasilkan `0` EXP, rule eksplisit menghasilkan `100` EXP, dan soft-deleted mission tidak muncul pada endpoint aktif.
