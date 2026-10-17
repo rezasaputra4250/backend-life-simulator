@@ -32,7 +32,7 @@ Dokumen ini mencatat status implementasi backend terhadap master prompt. Audit d
 - `missions` masih dipertahankan sebagai projection legacy selama endpoint existing dimigrasikan secara bertahap.
 - Read path mission aktif sudah memakai domain table dan mempertahankan `legacy_mission_id` sebagai ID API kompatibilitas.
 - Read path memiliki fallback eksplisit ke projection legacy jika domain mapping belum tersedia.
-- Create Personal dan Guild Mission memakai transaksi yang mencakup projection serta domain record.
+- Create System, Personal, dan Guild Mission memakai domain table sebagai sumber write lalu membuat projection kompatibilitas dalam transaksi.
 - Regression test tersedia untuk progresi level dan reward XP/non-XP/idempotency.
 
 ## Catatan balancing
