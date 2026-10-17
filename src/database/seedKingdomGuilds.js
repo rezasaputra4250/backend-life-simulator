@@ -80,9 +80,13 @@ async function seedKingdomGuilds() {
   }
 }
 
-seedKingdomGuilds()
-  .catch((error) => {
-    console.error('Seeder guild kerajaan gagal:', error.message);
-    process.exitCode = 1;
-  })
-  .finally(() => pool.end());
+module.exports = seedKingdomGuilds;
+
+if (require.main === module) {
+  seedKingdomGuilds()
+    .catch((error) => {
+      console.error('Seeder guild kerajaan gagal:', error.message);
+      process.exitCode = 1;
+    })
+    .finally(() => pool.end());
+}

@@ -1412,7 +1412,11 @@ async function migrate() {
   console.log('Migrasi database selesai.');
 }
 
-migrate().catch((error) => {
-  console.error('Migrasi database gagal:', error.message);
-  process.exit(1);
-});
+module.exports = migrate;
+
+if (require.main === module) {
+  migrate().catch((error) => {
+    console.error('Migrasi database gagal:', error.message);
+    process.exit(1);
+  });
+}

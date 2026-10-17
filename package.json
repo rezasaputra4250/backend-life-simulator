@@ -6,6 +6,8 @@
     "dev": "nodemon index.js",
     "start": "node index.js",
     "migrate": "node src/database/migrate.js",
+    "migrate:fresh": "node src/database/migrateFresh.js",
+    "db:seed": "node src/database/seed.js",
     "seed:missions": "node src/database/seedMissions.js",
     "seed:kingdom-guilds": "node src/database/seedKingdomGuilds.js",
     "seed:muslim-habits": "node src/database/seedMuslimHabits.js",

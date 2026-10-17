@@ -17,12 +17,16 @@ async function seedMissions() {
     }
   }
 
-  await pool.end();
   console.log(`Seeder misi selesai untuk ${users.length} pengguna.`);
 }
 
-seedMissions().catch(async (error) => {
-  console.error('Seeder misi gagal:', error.message);
-  await pool.end();
-  process.exit(1);
-});
+module.exports = seedMissions;
+
+if (require.main === module) {
+  seedMissions()
+    .catch((error) => {
+      console.error('Seeder misi gagal:', error.message);
+      process.exitCode = 1;
+    })
+    .finally(() => pool.end());
+}

@@ -17,12 +17,16 @@ async function seedMuslimHabits() {
     }
   }
 
-  await pool.end();
   console.log(`Seeder habit Muslim selesai untuk ${users.length} pengguna.`);
 }
 
-seedMuslimHabits().catch(async (error) => {
-  console.error('Seeder habit Muslim gagal:', error.message);
-  await pool.end();
-  process.exit(1);
-});
+module.exports = seedMuslimHabits;
+
+if (require.main === module) {
+  seedMuslimHabits()
+    .catch((error) => {
+      console.error('Seeder habit Muslim gagal:', error.message);
+      process.exitCode = 1;
+    })
+    .finally(() => pool.end());
+}
