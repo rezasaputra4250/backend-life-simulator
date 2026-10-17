@@ -1,6 +1,6 @@
 const { validationResult } = require('express-validator');
 const pool = require('../config/database');
-const { getProgression } = require('../services/progressionService');
+const { getProgression, experienceForLevel, levelForExperience } = require('../services/progressionService');
 
 function invalid(req, res) {
   const errors = validationResult(req);
@@ -139,6 +139,30 @@ async function updateDifficulty(req, res, next) {
       [req.body.difficulty, req.user.id]
     );
     if (!result.affectedRows) return res.status(404).json({ message: 'Pengguna tidak ditemukan.' });
+    const [stats] = await pool.query(
+      'SELECT experience FROM user_stats WHERE user_id = ? AND deleted_at IS NULL LIMIT 1',
+      [req.user.id]
+    );
+    if (stats.length) {
+      const [curveRows] = await pool.query(
+        `SELECT level, experience_to_next_level
+         FROM difficulty_level_experiences
+         WHERE difficulty = ? AND deleted_at IS NULL
+         ORDER BY level ASC`,
+        [req.body.difficulty]
+      );
+      const curve = curveRows.map((row) => ({
+        level: Number(row.level),
+        experience_to_next_level: Number(row.experience_to_next_level),
+      }));
+      const level = levelForExperience(stats[0].experience, req.body.difficulty, curve);
+      await pool.query(
+        `UPDATE user_stats
+         SET level = ?, experience_to_next_level = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE user_id = ? AND deleted_at IS NULL`,
+        [level, experienceForLevel(level, req.body.difficulty, curve), req.user.id]
+      );
+    }
     res.json({ message: 'Difficulty berhasil diperbarui. Misi lama tidak berubah.', data: { difficulty: req.body.difficulty } });
   } catch (error) { next(error); }
 }
