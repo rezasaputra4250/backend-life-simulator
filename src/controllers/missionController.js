@@ -168,7 +168,7 @@ async function list(req, res, next) {
            OR (missions.frequency = 'weekly' AND missions.mission_date = DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY))
            OR (missions.frequency = 'monthly' AND missions.mission_date = DATE_FORMAT(CURDATE(), '%Y-%m-01')))
        ORDER BY missions.scheduled_time IS NULL ASC, missions.scheduled_time ASC, missions.id ASC`,
-      [className, req.user.id, req.user.id]
+      [req.user.id, className, req.user.id]
     );
     const canonicalCombined = canonicalMissions.map(formatMission).sort((left, right) => {
       if (!left.scheduled_time && !right.scheduled_time) return Number(left.id) - Number(right.id);
