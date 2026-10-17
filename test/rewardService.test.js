@@ -17,6 +17,7 @@ test('records XP reward and delegates progression to the shared service', async 
   const connection = fakeConnection([
     [{ affectedRows: 1 }, []],
     [{ affectedRows: 1 }, []],
+    [{ affectedRows: 1 }, []],
     [[{ level: 1, experience: 0 }], []],
     [{ affectedRows: 1 }, []],
     [{ affectedRows: 1 }, []],
@@ -33,8 +34,8 @@ test('records XP reward and delegates progression to the shared service', async 
 
   assert.equal(result.granted, true);
   assert.equal(result.progression.amount, 100);
-  assert.match(connection.calls[2].sql, /FOR UPDATE/);
-  assert.equal(connection.calls[3].params[1], 100);
+  assert.match(connection.calls[3].sql, /FOR UPDATE/);
+  assert.equal(connection.calls[4].params[1], 100);
 });
 
 test('does not update Player EXP for non-XP rewards', async () => {
