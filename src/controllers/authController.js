@@ -86,17 +86,24 @@ async function unlockDefaultSkills(userId) {
 }
 
 async function createDefaultMissions(userId) {
+  const [users] = await pool.query(
+    'SELECT difficulty FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1',
+    [userId]
+  );
+  const difficulty = users[0]?.difficulty || 'easy';
+
   for (const mission of allMissionSeeds) {
     await pool.query(
       `INSERT IGNORE INTO missions
-         (user_id, mission_date, frequency, scheduled_time, title, detail, reward, reward_type, reward_name, reward_key)
-       VALUES (?, CASE ?
+         (user_id, category, difficulty, mission_date, frequency, scheduled_time, title, detail, reward, reward_type, reward_name, reward_key)
+       VALUES (?, 'system', ?, CASE ?
          WHEN 'daily' THEN CURDATE()
          WHEN 'weekly' THEN DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)
          ELSE DATE_FORMAT(CURDATE(), '%Y-%m-01')
        END, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         userId,
+        difficulty,
         mission.frequency || 'daily',
         mission.frequency || 'daily',
         mission.scheduled_time,
@@ -134,7 +141,7 @@ async function register(req, res, next) {
 
     const { name, email, password, role, company_id, referral_code } = req.body;
     const [existingUsers] = await pool.query(
-      'SELECT id FROM users WHERE email = ? LIMIT 1',
+      'SELECT id FROM users WHERE email = ? AND deleted_at IS NULL LIMIT 1',
       [email]
     );
 
@@ -175,7 +182,7 @@ async function register(req, res, next) {
 
     if (referral_code) {
       const [referrers] = await pool.query(
-        'SELECT id, affiliate_code FROM users WHERE affiliate_code = ? LIMIT 1',
+        'SELECT id, affiliate_code FROM users WHERE affiliate_code = ? AND deleted_at IS NULL LIMIT 1',
         [referral_code.toUpperCase()]
       );
 
@@ -192,7 +199,7 @@ async function register(req, res, next) {
 
     do {
       [duplicateCodes] = await pool.query(
-        'SELECT id FROM users WHERE affiliate_code = ? LIMIT 1',
+        'SELECT id FROM users WHERE affiliate_code = ? AND deleted_at IS NULL LIMIT 1',
         [affiliateCode]
       );
       if (duplicateCodes.length) affiliateCode = generateAffiliateCode();
@@ -347,7 +354,7 @@ async function forgotPassword(req, res, next) {
 
     const { email } = req.body;
     const [users] = await pool.query(
-      'SELECT id, email FROM users WHERE email = ? LIMIT 1',
+      'SELECT id, email FROM users WHERE email = ? AND deleted_at IS NULL LIMIT 1',
       [email]
     );
 

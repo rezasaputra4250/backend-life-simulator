@@ -81,7 +81,7 @@ async function createMission(req, res, next) {
     const errorResponse = validationErrorResponse(req, res);
     if (errorResponse) return errorResponse;
     const [guilds] = await pool.query(
-      'SELECT id FROM guilds WHERE id = ? AND owner_id = ? LIMIT 1',
+      'SELECT id FROM guilds WHERE id = ? AND owner_id = ? AND deleted_at IS NULL LIMIT 1',
       [req.params.id, req.user.id]
     );
     if (!guilds.length) return res.status(404).json({ message: 'Guild tidak ditemukan atau kamu bukan pemiliknya.' });
@@ -105,14 +105,14 @@ async function createMission(req, res, next) {
     await pool.query(
       `INSERT INTO notifications (user_id, type, title, body, data)
        SELECT guild_members.user_id, 'guild_mission', 'Misi guild baru', ?, JSON_OBJECT('guild_id', ?, 'mission_id', ?)
-       FROM guild_members WHERE guild_members.guild_id = ? AND guild_members.user_id <> ?`,
+       FROM guild_members WHERE guild_members.guild_id = ? AND guild_members.user_id <> ? AND guild_members.deleted_at IS NULL`,
       [`Guild memiliki misi baru: ${req.body.title}.`, req.params.id, result.insertId, req.params.id, req.user.id]
     );
     const [missions] = await pool.query(
       `SELECT id, guild_id, user_id AS creator_id, title, detail, difficulty,
               target_progress, current_progress, reward AS reward_xp, scheduled_time,
               DATE_FORMAT(mission_date, '%Y-%m-%d') AS mission_date, status, completed_at
-       FROM missions WHERE id = ?`,
+       FROM missions WHERE id = ? AND deleted_at IS NULL`,
       [result.insertId]
     );
     return res.status(201).json({ message: 'Misi guild berhasil dibuat.', data: missions[0] });
@@ -166,7 +166,7 @@ async function contributeMission(req, res, next) {
     await connection.query(
       `INSERT INTO notifications (user_id, type, title, body, data)
        SELECT guild_members.user_id, 'guild_mission_progress', 'Progress misi guild', ?, JSON_OBJECT('mission_id', ?)
-       FROM guild_members WHERE guild_members.guild_id = ? AND guild_members.user_id <> ?`,
+       FROM guild_members WHERE guild_members.guild_id = ? AND guild_members.user_id <> ? AND guild_members.deleted_at IS NULL`,
       [`${req.user.name} menambah progress misi guild ${applied}.`, mission.id, mission.guild_id, req.user.id]
     );
     await connection.commit();
@@ -219,7 +219,7 @@ async function invite(req, res, next) {
     const errorResponse = validationErrorResponse(req, res);
     if (errorResponse) return errorResponse;
     const [guilds] = await pool.query(
-      'SELECT id, max_members FROM guilds WHERE id = ? AND owner_id = ? LIMIT 1',
+      'SELECT id, max_members FROM guilds WHERE id = ? AND owner_id = ? AND deleted_at IS NULL LIMIT 1',
       [req.params.id, req.user.id]
     );
     if (!guilds.length) return res.status(404).json({ message: 'Guild tidak ditemukan atau kamu bukan pemiliknya.' });
@@ -231,11 +231,11 @@ async function invite(req, res, next) {
     );
     if (!friendships.length) return res.status(403).json({ message: 'Kamu hanya dapat mengundang teman.' });
     const [members] = await pool.query(
-      'SELECT id FROM guild_members WHERE guild_id = ? AND user_id = ? LIMIT 1',
+      'SELECT id FROM guild_members WHERE guild_id = ? AND user_id = ? AND deleted_at IS NULL LIMIT 1',
       [req.params.id, targetId]
     );
     if (members.length) return res.status(409).json({ message: 'Pengguna sudah menjadi anggota guild.' });
-    const [count] = await pool.query('SELECT COUNT(*) AS total FROM guild_members WHERE guild_id = ?', [req.params.id]);
+    const [count] = await pool.query('SELECT COUNT(*) AS total FROM guild_members WHERE guild_id = ? AND deleted_at IS NULL', [req.params.id]);
     if (Number(count[0].total) >= Number(guilds[0].max_members)) return res.status(409).json({ message: 'Guild sudah penuh.' });
     await pool.query(
       `INSERT INTO guild_invitations (guild_id, inviter_id, invitee_id, status)
@@ -271,8 +271,8 @@ async function respond(req, res, next) {
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction();
-      const [guilds] = await connection.query('SELECT max_members FROM guilds WHERE id = ? LIMIT 1', [invitation.guild_id]);
-      const [count] = await connection.query('SELECT COUNT(*) AS total FROM guild_members WHERE guild_id = ?', [invitation.guild_id]);
+      const [guilds] = await connection.query('SELECT max_members FROM guilds WHERE id = ? AND deleted_at IS NULL LIMIT 1', [invitation.guild_id]);
+      const [count] = await connection.query('SELECT COUNT(*) AS total FROM guild_members WHERE guild_id = ? AND deleted_at IS NULL', [invitation.guild_id]);
       if (!guilds.length || Number(count[0].total) >= Number(guilds[0].max_members)) {
         await connection.rollback();
         return res.status(409).json({ message: 'Guild sudah penuh.' });

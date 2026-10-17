@@ -35,6 +35,7 @@ async function list(req, res, next) {
        FROM friend_requests
        INNER JOIN users ON users.id = friend_requests.requester_id
        WHERE friend_requests.addressee_id = ? AND friend_requests.status = 'pending'
+         AND friend_requests.deleted_at IS NULL AND users.deleted_at IS NULL
        ORDER BY friend_requests.created_at DESC`,
       [req.user.id]
     );
@@ -86,7 +87,7 @@ async function search(req, res, next) {
                 LIMIT 1
               ) AS incoming_request_id
        FROM users
-       WHERE users.id <> ? AND (users.name LIKE ? OR users.email LIKE ?)
+       WHERE users.id <> ? AND users.deleted_at IS NULL AND (users.name LIKE ? OR users.email LIKE ?)
        ORDER BY users.name ASC
        LIMIT 20`,
       [req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, searchValue, searchValue]
@@ -112,7 +113,7 @@ async function request(req, res, next) {
     connection = await pool.getConnection();
     await connection.beginTransaction();
 
-    const [users] = await connection.query('SELECT id FROM users WHERE id = ? LIMIT 1 FOR UPDATE', [targetId]);
+    const [users] = await connection.query('SELECT id FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1 FOR UPDATE', [targetId]);
     if (!users.length) {
       await connection.rollback();
       return res.status(404).json({ message: 'Pengguna tidak ditemukan.' });

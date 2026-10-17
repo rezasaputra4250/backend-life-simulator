@@ -19,7 +19,9 @@ async function grantExperience(connection, userId, amount, source, description, 
   if (!safeAmount) return { amount: 0, levelUp: false };
 
   const sourceId = options.sourceId ?? null;
-  const idempotencyKey = options.idempotencyKey || `${source}:${userId}:${sourceId ?? description ?? 'manual'}`;
+  const idempotencyKey = options.idempotencyKey
+    ? `${userId}:${options.idempotencyKey}`
+    : `${userId}:${source}:${sourceId ?? description ?? 'manual'}`;
   const [ledgerResult] = await connection.query(
     `INSERT IGNORE INTO experience_transactions
        (user_id, source_type, source_id, amount, reason, idempotency_key)
@@ -32,7 +34,9 @@ async function grantExperience(connection, userId, amount, source, description, 
     'SELECT level, experience FROM user_stats WHERE user_id = ? LIMIT 1 FOR UPDATE',
     [userId]
   );
-  if (!beforeRows.length) return { amount: 0, levelUp: false };
+  if (!beforeRows.length) {
+    throw new Error('Statistik pengguna tidak ditemukan untuk pemberian EXP.');
+  }
 
   const before = beforeRows[0];
   const nextExperience = Math.max(0, Number(before.experience) + safeAmount);

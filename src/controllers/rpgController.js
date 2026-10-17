@@ -62,6 +62,7 @@ async function leaderboard(req, res, next) {
        FROM users INNER JOIN user_stats stats ON stats.user_id = users.id
        LEFT JOIN user_classes user_classes ON user_classes.user_id = users.id
        LEFT JOIN player_classes classes ON classes.id = user_classes.class_id
+       WHERE users.deleted_at IS NULL
        ORDER BY stats.experience DESC, stats.level DESC, users.id ASC LIMIT 50`
     );
     res.json({ message: 'Leaderboard berhasil diambil.', data: rows });

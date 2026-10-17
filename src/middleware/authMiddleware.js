@@ -50,6 +50,7 @@ async function authenticate(req, res, next) {
        FROM missions
        INNER JOIN skills ON skills.name = missions.reward_key
        WHERE missions.user_id = ?
+         AND missions.deleted_at IS NULL
          AND missions.reward_type = 'skill'
          AND missions.completed = 1`,
       [users[0].id, users[0].id]

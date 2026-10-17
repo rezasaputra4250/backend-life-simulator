@@ -18,9 +18,7 @@ async function ensureCurrentMissions(userId, connection = pool) {
          ELSE DATE_FORMAT(CURDATE(), '%Y-%m-01')
        END, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
-         frequency = VALUES(frequency), scheduled_time = VALUES(scheduled_time), detail = VALUES(detail), reward = VALUES(reward),
-         reward_type = VALUES(reward_type), reward_name = VALUES(reward_name),
-         reward_key = VALUES(reward_key)`,
+         frequency = VALUES(frequency), scheduled_time = VALUES(scheduled_time), detail = VALUES(detail)`,
       [
         userId,
         difficulty,

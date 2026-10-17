@@ -36,7 +36,7 @@ async function create(req, res, next) {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'xp', ?, 'xp', 1)`,
       [req.user.id, category, date, frequency, scheduled_time || null, title, detail || null, difficulty, duration_minutes, reward, `${reward} XP`]
     );
-    const [rows] = await pool.query('SELECT id, category, mission_date, frequency, scheduled_time, title, detail, difficulty, duration_minutes, reward, reward_type, reward_name, reward_key, completed, failed FROM missions WHERE id = ?', [result.insertId]);
+    const [rows] = await pool.query('SELECT id, category, mission_date, frequency, scheduled_time, title, detail, difficulty, duration_minutes, reward, reward_type, reward_name, reward_key, completed, failed FROM missions WHERE id = ? AND deleted_at IS NULL', [result.insertId]);
     res.status(201).json({ message: 'Misi berhasil dibuat.', data: rows[0] });
   } catch (error) { next(error); }
 }

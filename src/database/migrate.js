@@ -1082,9 +1082,7 @@ async function migrate() {
               END,
               ?, ?, ?, ?, ?, ?, ?, ? FROM users
        ON DUPLICATE KEY UPDATE
-         frequency = VALUES(frequency), scheduled_time = VALUES(scheduled_time), detail = VALUES(detail), reward = VALUES(reward),
-         reward_type = VALUES(reward_type), reward_name = VALUES(reward_name),
-         reward_key = VALUES(reward_key)`,
+         frequency = VALUES(frequency), scheduled_time = VALUES(scheduled_time), detail = VALUES(detail)`,
       [mission.frequency || 'daily', mission.frequency || 'daily', mission.scheduled_time, mission.title, mission.detail, mission.reward, mission.reward_type, mission.reward_name, mission.reward_key]
     );
   }
