@@ -71,8 +71,8 @@ async function complete(req, res, next) {
     if (mission.completed) { await connection.rollback(); return res.status(409).json({ message: 'Misi sudah selesai.' }); }
     if (mission.failed) { await connection.rollback(); return res.status(409).json({ message: 'Misi sudah gagal.' }); }
     const reward = await recordMissionReward(connection, req.user.id, mission);
-    await connection.query('UPDATE missions SET completed = 1, completed_at = NOW() WHERE id = ?', [mission.id]);
     await syncMissionStatus(connection, { ...mission, completed: true, completed_at: new Date() });
+    await connection.query('UPDATE missions SET completed = 1, completed_at = NOW() WHERE id = ?', [mission.id]);
     const progression = reward.progression;
     await connection.query('INSERT INTO notifications (user_id, type, title, body) VALUES (?, \'reward\', \'Misi selesai\', ?)', [req.user.id, `Kamu mendapatkan ${mission.reward} XP dari misi: ${mission.title}.`]);
     await connection.commit();

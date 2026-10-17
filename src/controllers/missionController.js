@@ -340,10 +340,6 @@ async function toggle(req, res, next) {
         });
       }
 
-      await connection.query(
-        `UPDATE missions SET completed = ?, completed_at = ? WHERE id = ? AND user_id = ? AND category <> 'guild'`,
-        [isCompleting ? 1 : 0, isCompleting ? new Date() : null, req.params.id, req.user.id]
-      );
       await syncMissionStatus(connection, {
         ...currentMission,
         completed: isCompleting,
@@ -351,6 +347,10 @@ async function toggle(req, res, next) {
         failed: Boolean(currentMission.failed),
         failed_at: null,
       });
+      await connection.query(
+        `UPDATE missions SET completed = ?, completed_at = ? WHERE id = ? AND user_id = ? AND category <> 'guild'`,
+        [isCompleting ? 1 : 0, isCompleting ? new Date() : null, req.params.id, req.user.id]
+      );
 
       if (isCompleting) {
         const reward = await recordMissionReward(connection, req.user.id, currentMission);
@@ -533,12 +533,6 @@ async function cancel(req, res, next) {
       if (reward) {
         await connection.query('UPDATE user_rewards SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL', [reward.id]);
       }
-      await connection.query(
-        `UPDATE missions
-         SET completed = 0, completed_at = NULL
-         WHERE id = ? AND user_id = ?`,
-        [mission.id, req.user.id]
-      );
       await syncMissionStatus(connection, {
         ...mission,
         completed: false,
@@ -546,6 +540,12 @@ async function cancel(req, res, next) {
         failed: Boolean(mission.failed),
         failed_at: null,
       });
+      await connection.query(
+        `UPDATE missions
+         SET completed = 0, completed_at = NULL
+         WHERE id = ? AND user_id = ?`,
+        [mission.id, req.user.id]
+      );
 
       await connection.commit();
     } catch (error) {

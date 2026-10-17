@@ -180,13 +180,13 @@ async function contributeMission(req, res, next) {
     );
     const nextProgress = Number(mission.current_progress) + applied;
     const completed = nextProgress >= Number(mission.target_progress);
+    await syncGuildMissionContribution(connection, mission, req.user.id, applied, nextProgress, completed);
     await connection.query(
       `UPDATE missions
        SET current_progress = ?, status = ?, completed = ?, completed_at = ?
        WHERE id = ?`,
       [nextProgress, completed ? 'completed' : 'active', completed ? 1 : 0, completed ? new Date() : null, mission.id]
     );
-    await syncGuildMissionContribution(connection, mission, req.user.id, applied, nextProgress, completed);
     const reward = Math.max(1, Math.floor(Number(mission.reward) * applied / Number(mission.target_progress)));
     const rewardResult = await recordGuildContributionReward(connection, req.user.id, mission, reward);
     await connection.query(
