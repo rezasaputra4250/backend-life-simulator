@@ -4,52 +4,13 @@ const { allMissionSeeds } = require('../constants/missions');
 const { itemCatalog, badgeCatalog } = require('../constants/rewards');
 const { skills } = require('../constants/skills');
 const { recordMissionReward } = require('../services/rewardService');
-const { registerSystemMission, syncMissionStatus } = require('../services/missionDomainService');
+const { ensureSystemMission, syncMissionStatus } = require('../services/missionDomainService');
 
 async function ensureCurrentMissions(userId, connection = pool) {
   const [userRows] = await connection.query('SELECT difficulty FROM users WHERE id = ? LIMIT 1', [userId]);
   const difficulty = userRows[0]?.difficulty || 'easy';
   for (const mission of allMissionSeeds) {
-    await connection.query(
-      `INSERT INTO missions
-         (user_id, difficulty, mission_date, frequency, scheduled_time, title, detail, reward, reward_type, reward_name, reward_key)
-       VALUES (?, ?, CASE ?
-         WHEN 'daily' THEN CURDATE()
-         WHEN 'weekly' THEN DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)
-         ELSE DATE_FORMAT(CURDATE(), '%Y-%m-01')
-       END, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE
-         frequency = VALUES(frequency), scheduled_time = VALUES(scheduled_time), detail = VALUES(detail)`,
-      [
-        userId,
-        difficulty,
-        mission.frequency || 'daily',
-        mission.frequency || 'daily',
-        mission.scheduled_time,
-        mission.title,
-        mission.detail,
-        mission.reward,
-        mission.reward_type,
-        mission.reward_name,
-        mission.reward_key,
-      ]
-    );
-    const [missionRows] = await connection.query(
-      `SELECT id, user_id, difficulty, mission_date, frequency, scheduled_time, title, detail,
-              duration_minutes, reward, reward_type, reward_name, reward_key,
-              completed, completed_at, failed, failed_at
-       FROM missions
-       WHERE user_id = ? AND category = 'system' AND title = ?
-         AND mission_date = CASE ?
-           WHEN 'daily' THEN CURDATE()
-           WHEN 'weekly' THEN DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)
-           ELSE DATE_FORMAT(CURDATE(), '%Y-%m-01')
-         END
-         AND deleted_at IS NULL
-       LIMIT 1`,
-      [userId, mission.title, mission.frequency || 'daily']
-    );
-    if (missionRows[0]) await registerSystemMission(connection, missionRows[0].id, missionRows[0]);
+    await ensureSystemMission(connection, userId, difficulty, mission);
   }
 }
 

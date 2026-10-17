@@ -6,7 +6,7 @@ const { signAuthToken } = require('../utils/jwt');
 const { createResetToken, hashResetToken } = require('../utils/passwordReset');
 const { allMissionSeeds } = require('../constants/missions');
 const { generateAffiliateCode } = require('../utils/affiliate');
-const { registerSystemMission } = require('../services/missionDomainService');
+const { ensureSystemMission } = require('../services/missionDomainService');
 
 function formatUser(user) {
   return {
@@ -94,38 +94,11 @@ async function createDefaultMissions(userId) {
   const difficulty = users[0]?.difficulty || 'easy';
 
   for (const mission of allMissionSeeds) {
-    const [result] = await pool.query(
-      `INSERT IGNORE INTO missions
-         (user_id, category, difficulty, mission_date, frequency, scheduled_time, title, detail, reward, reward_type, reward_name, reward_key)
-       VALUES (?, 'system', ?, CASE ?
-         WHEN 'daily' THEN CURDATE()
-         WHEN 'weekly' THEN DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)
-         ELSE DATE_FORMAT(CURDATE(), '%Y-%m-01')
-       END, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        userId,
-        difficulty,
-        mission.frequency || 'daily',
-        mission.frequency || 'daily',
-        mission.scheduled_time,
-        mission.title,
-        mission.detail,
-        mission.reward,
-        mission.reward_type,
-        mission.reward_name,
-        mission.reward_key,
-      ]
-    );
-    if (result.insertId) {
-      const [missionRows] = await pool.query(
-        `SELECT id, user_id, difficulty, mission_date, frequency, scheduled_time, title, detail,
-                duration_minutes, reward, reward_type, reward_name, reward_key,
-                completed, completed_at, failed, failed_at
-         FROM missions WHERE id = ? AND deleted_at IS NULL`,
-        [result.insertId]
-      );
-      if (missionRows[0]) await registerSystemMission(pool, result.insertId, missionRows[0]);
-    }
+    await ensureSystemMission(pool, userId, difficulty, {
+      ...mission,
+      frequency: mission.frequency || 'daily',
+      duration_minutes: mission.duration_minutes || 15,
+    });
   }
 }
 

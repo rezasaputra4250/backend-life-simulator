@@ -1,7 +1,7 @@
 const { validationResult } = require('express-validator');
 const pool = require('../config/database');
 const { grantExperience } = require('../services/progressionService');
-const { registerGuildMission, syncGuildMissionContribution } = require('../services/missionDomainService');
+const { createGuildMission, syncGuildMissionContribution } = require('../services/missionDomainService');
 
 function validationErrorResponse(req, res) {
   const errors = validationResult(req);
@@ -115,28 +115,34 @@ async function createMission(req, res, next) {
       );
       const rewardXp = Number(difficultyRows[0]?.base_reward_xp || 5);
       const grantPlayerExperience = req.body.grant_player_experience === true;
-      const [result] = await connection.query(
-        `INSERT INTO missions
-         (user_id, category, guild_id, mission_date, frequency, scheduled_time, title, detail, difficulty,
-          target_progress, current_progress, status, reward, reward_type, reward_name, reward_key, custom_source, grant_player_experience)
-         VALUES (?, 'guild', ?, ?, 'daily', ?, ?, ?, ?, ?, 0, 'active', ?, 'xp', ?, 'xp', 1, ?)`,
-        [req.user.id, req.params.id, req.body.mission_date, req.body.scheduled_time || null, req.body.title, req.body.detail || null, difficulty,
-          req.body.target_progress || 1, rewardXp, `${rewardXp} XP untuk kontribusi`, grantPlayerExperience]
-      );
+      const missionId = await createGuildMission(connection, {
+        user_id: req.user.id,
+        guild_id: req.params.id,
+        mission_date: req.body.mission_date,
+        scheduled_time: req.body.scheduled_time,
+        title: req.body.title,
+        detail: req.body.detail,
+        difficulty,
+        target_progress: req.body.target_progress || 1,
+        reward: rewardXp,
+        reward_type: 'xp',
+        reward_name: `${rewardXp} XP untuk kontribusi`,
+        reward_key: 'xp',
+        grant_player_experience: grantPlayerExperience,
+      });
       await connection.query(
         `INSERT INTO notifications (user_id, type, title, body, data)
          SELECT guild_members.user_id, 'guild_mission', 'Misi guild baru', ?, JSON_OBJECT('guild_id', ?, 'mission_id', ?)
          FROM guild_members WHERE guild_members.guild_id = ? AND guild_members.user_id <> ? AND guild_members.deleted_at IS NULL`,
-        [`Guild memiliki misi baru: ${req.body.title}.`, req.params.id, result.insertId, req.params.id, req.user.id]
+        [`Guild memiliki misi baru: ${req.body.title}.`, req.params.id, missionId, req.params.id, req.user.id]
       );
       const [missions] = await connection.query(
         `SELECT id, guild_id, user_id, user_id AS creator_id, title, detail, difficulty,
                 target_progress, current_progress, reward, reward AS reward_xp, grant_player_experience, scheduled_time,
                 DATE_FORMAT(mission_date, '%Y-%m-%d') AS mission_date, status, completed_at
          FROM missions WHERE id = ? AND deleted_at IS NULL`,
-        [result.insertId]
+        [missionId]
       );
-      if (missions[0]) await registerGuildMission(connection, result.insertId, missions[0]);
       await connection.commit();
       return res.status(201).json({ message: 'Misi guild berhasil dibuat.', data: missions[0] });
     } catch (error) {
