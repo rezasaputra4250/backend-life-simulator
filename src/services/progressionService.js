@@ -1,7 +1,12 @@
 const pool = require('../config/database');
 
 function experienceForLevel(level) {
-  return Math.max(100, Math.round(100 * (1.5 ** Math.max(0, Number(level) - 1))));
+  const targetLevel = Math.max(1, Number(level) || 1);
+  let requirement = 100;
+  for (let currentLevel = 1; currentLevel < targetLevel; currentLevel += 1) {
+    requirement = Math.round(requirement * 1.5);
+  }
+  return requirement;
 }
 
 function levelForExperience(totalExperience) {

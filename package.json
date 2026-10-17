@@ -8,7 +8,7 @@
     "migrate": "node src/database/migrate.js",
     "seed:missions": "node src/database/seedMissions.js",
     "seed:muslim-habits": "node src/database/seedMuslimHabits.js",
-    "test": "echo \"Belum ada test yang dikonfigurasi\" && exit 0"
+    "test": "node --test"
   },
   "keywords": [],
   "author": "",
