@@ -1,6 +1,6 @@
 const { validationResult } = require('express-validator');
 const pool = require('../config/database');
-const { grantExperience } = require('../services/progressionService');
+const { recordGuildContributionReward } = require('../services/rewardService');
 const { createGuildMission, syncGuildMissionContribution } = require('../services/missionDomainService');
 
 function validationErrorResponse(req, res) {
@@ -188,17 +188,7 @@ async function contributeMission(req, res, next) {
     );
     await syncGuildMissionContribution(connection, mission, req.user.id, applied, nextProgress, completed);
     const reward = Math.max(1, Math.floor(Number(mission.reward) * applied / Number(mission.target_progress)));
-    const [rewardTransaction] = await connection.query(
-      `INSERT IGNORE INTO reward_transactions (user_id, source_type, source_id, reward_type, amount)
-       VALUES (?, 'guild_mission_contribution', ?, 'xp', ?)`,
-      [req.user.id, mission.id, reward]
-    );
-    if (rewardTransaction.affectedRows && mission.grant_player_experience) {
-      await grantExperience(connection, req.user.id, reward, 'guild_mission', mission.title, {
-        sourceId: mission.id,
-        idempotencyKey: `guild_mission:${mission.id}:user:${req.user.id}`,
-      });
-    }
+    const rewardResult = await recordGuildContributionReward(connection, req.user.id, mission, reward);
     await connection.query(
       `INSERT INTO notifications (user_id, type, title, body, data)
        SELECT guild_members.user_id, 'guild_mission_progress', 'Progress misi guild', ?, JSON_OBJECT('mission_id', ?)
@@ -206,7 +196,7 @@ async function contributeMission(req, res, next) {
       [`${req.user.name} menambah progress misi guild ${applied}.`, mission.id, mission.guild_id, req.user.id]
     );
     await connection.commit();
-    return res.json({ message: completed ? 'Misi guild selesai.' : 'Progress misi guild berhasil ditambahkan.', data: { mission_id: mission.id, applied, current_progress: nextProgress, target_progress: mission.target_progress, completed, reward_xp: rewardTransaction.affectedRows ? reward : 0 } });
+    return res.json({ message: completed ? 'Misi guild selesai.' : 'Progress misi guild berhasil ditambahkan.', data: { mission_id: mission.id, applied, current_progress: nextProgress, target_progress: mission.target_progress, completed, reward_xp: rewardResult.amount } });
   } catch (error) { await connection.rollback(); return next(error); }
   finally { connection.release(); }
 }

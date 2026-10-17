@@ -31,4 +31,25 @@ async function recordMissionReward(connection, userId, mission) {
   return { granted: true, progression };
 }
 
-module.exports = { recordMissionReward };
+async function recordGuildContributionReward(connection, userId, mission, amount) {
+  const rewardAmount = Math.max(0, Number(amount) || 0);
+  const [rewardResult] = await connection.query(
+    `INSERT IGNORE INTO reward_transactions
+       (user_id, source_type, source_id, reward_type, amount)
+     VALUES (?, 'guild_mission_contribution', ?, 'xp', ?)`,
+    [userId, mission.id, rewardAmount]
+  );
+
+  if (!rewardResult.affectedRows || !mission.grant_player_experience) {
+    return { granted: false, amount: 0, duplicate: !rewardResult.affectedRows };
+  }
+
+  const progression = await grantExperience(connection, userId, rewardAmount, 'guild_mission', mission.title, {
+    sourceId: mission.id,
+    idempotencyKey: `guild_mission:${mission.id}:user:${userId}`,
+  });
+
+  return { granted: progression.amount > 0, amount: progression.amount, progression };
+}
+
+module.exports = { recordMissionReward, recordGuildContributionReward };

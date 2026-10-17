@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { recordMissionReward } = require('../src/services/rewardService');
+const { recordMissionReward, recordGuildContributionReward } = require('../src/services/rewardService');
 
 function fakeConnection(results) {
   const calls = [];
@@ -72,4 +72,34 @@ test('treats duplicate reward insert as idempotent', async () => {
   assert.equal(result.granted, false);
   assert.equal(result.progression.amount, 0);
   assert.equal(connection.calls.length, 1);
+});
+
+test('keeps guild contribution EXP disabled unless explicitly configured', async () => {
+  const connection = fakeConnection([[{ affectedRows: 1 }, []]]);
+  const result = await recordGuildContributionReward(connection, 7, {
+    id: 21,
+    title: 'Target guild',
+    grant_player_experience: 0,
+  }, 50);
+
+  assert.equal(result.amount, 0);
+  assert.equal(connection.calls.length, 1);
+});
+
+test('grants explicit guild contribution EXP through progression service', async () => {
+  const connection = fakeConnection([
+    [{ affectedRows: 1 }, []],
+    [{ affectedRows: 1 }, []],
+    [[{ level: 1, experience: 0 }], []],
+    [{ affectedRows: 1 }, []],
+    [{ affectedRows: 1 }, []],
+  ]);
+  const result = await recordGuildContributionReward(connection, 7, {
+    id: 22,
+    title: 'Target guild',
+    grant_player_experience: 1,
+  }, 50);
+
+  assert.equal(result.amount, 50);
+  assert.equal(connection.calls.length, 5);
 });
