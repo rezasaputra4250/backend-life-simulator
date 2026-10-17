@@ -763,6 +763,50 @@ async function migrate() {
     }
   }
 
+  // Store the user's current class directly on users. Keep user_classes as a
+  // compatibility mirror while existing clients and data are migrated.
+  const [userClassColumns] = await connection.query(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'users' AND COLUMN_NAME = 'class_id'`,
+    [env.database.name]
+  );
+  if (!userClassColumns.length) {
+    await connection.query(
+      'ALTER TABLE users ADD COLUMN class_id BIGINT UNSIGNED NULL AFTER difficulty'
+    );
+  }
+  const [userClassIndexes] = await connection.query(
+    `SELECT INDEX_NAME
+     FROM INFORMATION_SCHEMA.STATISTICS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'users' AND INDEX_NAME = 'users_class_id_index'`,
+    [env.database.name]
+  );
+  if (!userClassIndexes.length) {
+    await connection.query('ALTER TABLE users ADD INDEX users_class_id_index (class_id)');
+  }
+  const [userClassForeignKeys] = await connection.query(
+    `SELECT CONSTRAINT_NAME
+     FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'users'
+       AND COLUMN_NAME = 'class_id' AND REFERENCED_TABLE_NAME = 'player_classes'`,
+    [env.database.name]
+  );
+  if (!userClassForeignKeys.length) {
+    await connection.query(
+      `ALTER TABLE users
+       ADD CONSTRAINT users_class_id_foreign
+       FOREIGN KEY (class_id) REFERENCES player_classes(id) ON DELETE SET NULL`
+    );
+  }
+  await connection.query(
+    `UPDATE users
+     INNER JOIN user_classes ON user_classes.user_id = users.id
+       AND user_classes.deleted_at IS NULL
+     SET users.class_id = user_classes.class_id
+     WHERE users.class_id IS NULL AND users.deleted_at IS NULL`
+  );
+
   const [guildMissionDomainColumns] = await connection.query(
     `SELECT COLUMN_NAME
      FROM INFORMATION_SCHEMA.COLUMNS

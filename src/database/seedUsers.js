@@ -64,6 +64,15 @@ async function seedUsers() {
        AND users.deleted_at IS NULL
      ON DUPLICATE KEY UPDATE deleted_at = NULL, updated_at = CURRENT_TIMESTAMP`
   );
+  await pool.query(
+    `UPDATE users
+     SET class_id = (
+       SELECT id FROM player_classes
+       WHERE is_active = 1 AND deleted_at IS NULL
+       ORDER BY id ASC LIMIT 1
+     ), updated_at = CURRENT_TIMESTAMP
+     WHERE email LIKE 'test%@example.com' AND deleted_at IS NULL AND class_id IS NULL`
+  );
 
   console.log(`Seeder user selesai: ${userCount} user tersedia dengan email test1@example.com sampai test${userCount}@example.com.`);
 }

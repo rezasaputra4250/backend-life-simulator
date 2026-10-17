@@ -15,7 +15,7 @@ async function authenticate(req, res, next) {
 
     const payload = jwt.verify(token, env.jwt.secret);
     const [users] = await pool.query(
-      `SELECT users.id, users.name, users.email, users.affiliate_code, users.referred_by, users.difficulty,
+      `SELECT users.id, users.name, users.email, users.affiliate_code, users.referred_by, users.difficulty, users.class_id,
               users.created_at, users.updated_at,
               roles.id AS role_id, roles.name AS role_name, roles.label AS role_label,
               companies.id AS company_id, companies.name AS company_name,
@@ -73,6 +73,7 @@ async function authenticate(req, res, next) {
       email: users[0].email,
       affiliate_code: users[0].affiliate_code,
       referred_by: users[0].referred_by,
+      class_id: users[0].class_id || null,
       role: {
         id: users[0].role_id,
         name: users[0].role_name,

@@ -15,6 +15,7 @@ function formatUser(user) {
     email: user.email,
     affiliate_code: user.affiliate_code,
     referred_by: user.referred_by,
+    class_id: user.class_id || null,
     difficulty: user.difficulty || 'easy',
     role: {
       id: user.role_id,
@@ -229,6 +230,7 @@ async function register(req, res, next) {
       email,
       affiliate_code: affiliateCode,
       referred_by: referrer ? referrer.id : null,
+      class_id: null,
       employee_number: null,
       position: null,
       department: null,
@@ -274,7 +276,7 @@ async function login(req, res, next) {
     const { email, password } = req.body;
     const [users] = await pool.query(
       `SELECT users.id, users.name, users.email, users.password,
-              users.affiliate_code, users.referred_by, users.difficulty,
+              users.affiliate_code, users.referred_by, users.difficulty, users.class_id,
               roles.id AS role_id, roles.name AS role_name, roles.label AS role_label,
               companies.id AS company_id, companies.name AS company_name,
               companies.legal_name AS company_legal_name, companies.code AS company_code,

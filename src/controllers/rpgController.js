@@ -32,21 +32,30 @@ async function selectClass(req, res, next) {
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction();
+      const [users] = await connection.query(
+        'SELECT class_id FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1 FOR UPDATE',
+        [req.user.id]
+      );
+      if (!users.length) {
+        await connection.rollback();
+        return res.status(404).json({ message: 'Pengguna tidak ditemukan.' });
+      }
       const [existing] = await connection.query(
         'SELECT user_id, class_id, deleted_at FROM user_classes WHERE user_id = ? LIMIT 1 FOR UPDATE',
         [req.user.id]
       );
-      if (existing.length && existing[0].deleted_at === null && Number(existing[0].class_id) === Number(chosen.id)) {
+      const previousClassId = users[0].class_id || existing[0]?.class_id || null;
+      if (previousClassId && Number(previousClassId) === Number(chosen.id)) {
         await connection.rollback();
         return res.status(200).json({ message: 'Class karakter sudah dipilih sebelumnya.', data: chosen });
       }
 
       let previousClass = null;
-      if (existing.length && existing[0].class_id) {
+      if (previousClassId) {
         const [previousClasses] = await connection.query(
           `SELECT strength_bonus, intelligence_bonus, agility_bonus, stamina_bonus, luck_bonus
            FROM player_classes WHERE id = ? LIMIT 1`,
-          [existing[0].class_id]
+          [previousClassId]
         );
         previousClass = previousClasses[0] || null;
       }
@@ -60,6 +69,10 @@ async function selectClass(req, res, next) {
       } else {
         await connection.query('INSERT INTO user_classes (user_id, class_id) VALUES (?, ?)', [req.user.id, chosen.id]);
       }
+      await connection.query(
+        'UPDATE users SET class_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [chosen.id, req.user.id]
+      );
       await connection.query(
         `UPDATE user_stats SET strength = GREATEST(0, strength + ?), intelligence = GREATEST(0, intelligence + ?),
          agility = GREATEST(0, agility + ?), stamina = GREATEST(0, stamina + ?), luck = GREATEST(0, luck + ?)
@@ -90,8 +103,7 @@ async function leaderboard(req, res, next) {
       `SELECT users.id, users.name, stats.level, stats.experience,
               COALESCE(classes.label, 'Belum memilih class') AS class_label
        FROM users INNER JOIN user_stats stats ON stats.user_id = users.id
-       LEFT JOIN user_classes user_classes ON user_classes.user_id = users.id
-       LEFT JOIN player_classes classes ON classes.id = user_classes.class_id
+       LEFT JOIN player_classes classes ON classes.id = users.class_id
        WHERE users.deleted_at IS NULL
        ORDER BY stats.experience DESC, stats.level DESC, users.id ASC LIMIT 50`
     );

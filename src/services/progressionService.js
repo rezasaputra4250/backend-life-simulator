@@ -76,8 +76,8 @@ async function getProgression(userId) {
             classes.strength_bonus, classes.intelligence_bonus, classes.agility_bonus,
             classes.stamina_bonus, classes.luck_bonus
      FROM user_stats stats
-     LEFT JOIN user_classes ON user_classes.user_id = stats.user_id AND user_classes.deleted_at IS NULL
-     LEFT JOIN player_classes classes ON classes.id = user_classes.class_id AND classes.deleted_at IS NULL
+     INNER JOIN users ON users.id = stats.user_id AND users.deleted_at IS NULL
+     LEFT JOIN player_classes classes ON classes.id = users.class_id AND classes.deleted_at IS NULL
      WHERE stats.user_id = ? AND stats.deleted_at IS NULL LIMIT 1`,
     [userId]
   );
