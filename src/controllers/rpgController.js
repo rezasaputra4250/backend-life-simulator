@@ -72,7 +72,7 @@ async function leaderboard(req, res, next) {
 async function difficultyConfigs(req, res, next) {
   try {
     const [rows] = await pool.query(
-      `SELECT difficulty, base_reward_xp
+      `SELECT difficulty, base_reward_xp, description
        FROM difficulty_configs
        WHERE is_active = 1 AND deleted_at IS NULL
        ORDER BY FIELD(difficulty, 'easy', 'normal', 'hard', 'expert')`

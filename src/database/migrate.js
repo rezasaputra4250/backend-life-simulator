@@ -519,6 +519,7 @@ async function migrate() {
     CREATE TABLE IF NOT EXISTS difficulty_configs (
       difficulty ENUM('easy', 'normal', 'hard', 'expert') NOT NULL PRIMARY KEY,
       base_reward_xp INT UNSIGNED NOT NULL,
+      description VARCHAR(255) NOT NULL DEFAULT '',
       is_active TINYINT(1) NOT NULL DEFAULT 1,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -778,10 +779,26 @@ async function migrate() {
     await connection.query("UPDATE missions SET grant_player_experience = 0 WHERE category = 'guild'");
   }
 
+  const [difficultyDescriptionColumns] = await connection.query(
+    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'difficulty_configs' AND COLUMN_NAME = 'description'`,
+    [env.database.name]
+  );
+  if (!difficultyDescriptionColumns.length) {
+    await connection.query("ALTER TABLE difficulty_configs ADD COLUMN description VARCHAR(255) NOT NULL DEFAULT '' AFTER base_reward_xp");
+  }
+
   await connection.query(
-    `INSERT INTO difficulty_configs (difficulty, base_reward_xp)
-     VALUES ('easy', 100), ('normal', 50), ('hard', 10), ('expert', 5)
-     ON DUPLICATE KEY UPDATE base_reward_xp = VALUES(base_reward_xp), is_active = 1`
+    `INSERT INTO difficulty_configs (difficulty, base_reward_xp, description)
+     VALUES
+       ('easy', 100, 'Target ringan untuk membangun kebiasaan dengan konsisten.'),
+       ('normal', 50, 'Tantangan seimbang untuk rutinitas yang sudah mulai stabil.'),
+       ('hard', 10, 'Target lebih menantang untuk mendorong disiplin dan perkembangan lebih cepat.'),
+       ('expert', 5, 'Untuk petualang berpengalaman yang siap menghadapi target paling berat.')
+     ON DUPLICATE KEY UPDATE
+       base_reward_xp = VALUES(base_reward_xp),
+       description = CASE WHEN description = '' THEN VALUES(description) ELSE description END,
+       is_active = 1`
   );
 
   const [missionExtraColumns] = await connection.query(
