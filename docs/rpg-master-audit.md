@@ -14,6 +14,7 @@ Dokumen ini mencatat status implementasi backend terhadap master prompt. Audit d
 - Pemberian EXP mengunci `user_stats` dengan `FOR UPDATE`.
 - Koreksi EXP dicatat sebagai transaksi negatif.
 - Reward mission dipusatkan pada `rewardService`.
+- Reward Guild contribution juga memakai `rewardService`; EXP hanya diberikan jika flag eksplisit aktif.
 - Guild contribution tidak memberikan Player EXP kecuali `grant_player_experience` diaktifkan eksplisit.
 - Timestamp dan `deleted_at` ditambahkan secara idempotent ke tabel yang dikelola migration.
 - Query aktif pada jalur RPG utama memfilter `deleted_at IS NULL`.
@@ -33,7 +34,7 @@ Dokumen ini mencatat status implementasi backend terhadap master prompt. Audit d
 - Read path mission aktif sudah memakai domain table dan mempertahankan `legacy_mission_id` sebagai ID API kompatibilitas.
 - Read path memiliki fallback eksplisit ke projection legacy jika domain mapping belum tersedia.
 - Create System, Personal, dan Guild Mission memakai domain table sebagai sumber write lalu membuat projection kompatibilitas dalam transaksi.
-- Regression test tersedia untuk progresi level dan reward XP/non-XP/idempotency.
+- Regression test tersedia untuk progresi level, reward XP/non-XP, idempotency, dan guild EXP eksplisit/non-eksplisit.
 
 ## Catatan balancing
 
