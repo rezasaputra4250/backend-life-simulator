@@ -250,9 +250,54 @@ async function list(req, res, next) {
        WHERE guild_missions.status = 'active' AND guild_missions.deleted_at IS NULL
          AND mission_date = CURDATE()
       )
+      UNION ALL
+      (SELECT missions.id, missions.category, missions.guild_id, missions.target_progress,
+              missions.current_progress, missions.status, missions.difficulty,
+              DATE_FORMAT(missions.mission_date, '%Y-%m-%d') AS mission_date,
+              missions.frequency, missions.scheduled_time, missions.title, missions.detail,
+              missions.reward, missions.reward_type, missions.reward_name, missions.reward_key,
+              missions.completed, missions.completed_at, missions.failed, missions.failed_at,
+              missions.created_at, missions.updated_at
+       FROM missions
+       WHERE missions.user_id = ? AND missions.category = 'system' AND missions.deleted_at IS NULL
+         AND NOT EXISTS (SELECT 1 FROM system_mission_instances WHERE legacy_mission_id = missions.id)
+         AND ((missions.frequency = 'daily' AND missions.mission_date = CURDATE())
+           OR (missions.frequency = 'weekly' AND missions.mission_date = DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY))
+           OR (missions.frequency = 'monthly' AND missions.mission_date = DATE_FORMAT(CURDATE(), '%Y-%m-01')))
+      )
+      UNION ALL
+      (SELECT missions.id, missions.category, missions.guild_id, missions.target_progress,
+              missions.current_progress, missions.status, missions.difficulty,
+              DATE_FORMAT(missions.mission_date, '%Y-%m-%d') AS mission_date,
+              missions.frequency, missions.scheduled_time, missions.title, missions.detail,
+              missions.reward, missions.reward_type, missions.reward_name, missions.reward_key,
+              missions.completed, missions.completed_at, missions.failed, missions.failed_at,
+              missions.created_at, missions.updated_at
+       FROM missions
+       WHERE missions.user_id = ? AND missions.category = 'personal' AND missions.deleted_at IS NULL
+         AND NOT EXISTS (SELECT 1 FROM personal_missions WHERE legacy_mission_id = missions.id)
+         AND ((missions.frequency = 'daily' AND missions.mission_date = CURDATE())
+           OR (missions.frequency = 'weekly' AND missions.mission_date = DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY))
+           OR (missions.frequency = 'monthly' AND missions.mission_date = DATE_FORMAT(CURDATE(), '%Y-%m-01')))
+      )
+      UNION ALL
+      (SELECT missions.id, missions.category, missions.guild_id, missions.target_progress,
+              missions.current_progress, missions.status, missions.difficulty,
+              DATE_FORMAT(missions.mission_date, '%Y-%m-%d') AS mission_date,
+              missions.frequency, missions.scheduled_time, missions.title, missions.detail,
+              missions.reward, missions.reward_type, missions.reward_name, missions.reward_key,
+              missions.completed, missions.completed_at, missions.failed, missions.failed_at,
+              missions.created_at, missions.updated_at
+       FROM missions
+       INNER JOIN guild_members ON guild_members.guild_id = missions.guild_id
+         AND guild_members.user_id = ? AND guild_members.deleted_at IS NULL
+       WHERE missions.category = 'guild' AND missions.status = 'active' AND missions.deleted_at IS NULL
+         AND NOT EXISTS (SELECT 1 FROM guild_missions WHERE legacy_mission_id = missions.id)
+         AND missions.mission_date = CURDATE()
+      )
       )) AS active_missions
       ORDER BY active_missions.scheduled_time IS NULL ASC, active_missions.scheduled_time ASC, active_missions.id ASC`,
-      [req.user.id, req.user.id, req.user.id]
+      [req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, req.user.id]
     );
     const [todoItems] = await pool.query(
       `SELECT todo_items.id AS todo_id, todo_items.title, todo_items.description,
