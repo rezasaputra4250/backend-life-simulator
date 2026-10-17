@@ -233,6 +233,14 @@ async function create(req, res, next) {
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction();
+      const [existingMemberships] = await connection.query(
+        'SELECT guild_id FROM guild_members WHERE user_id = ? AND deleted_at IS NULL LIMIT 1 FOR UPDATE',
+        [req.user.id]
+      );
+      if (existingMemberships.length) {
+        await connection.rollback();
+        return res.status(409).json({ message: 'Setiap pengguna hanya dapat memiliki satu guild.' });
+      }
       const [result] = await connection.query(
         'INSERT INTO guilds (owner_id, name, description, max_members) VALUES (?, ?, ?, ?)',
         [req.user.id, req.body.name, req.body.description || null, req.body.max_members || 20]
@@ -261,6 +269,9 @@ async function create(req, res, next) {
       connection.release();
     }
   } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY' && error.message.includes('guild_members_active_user_unique')) {
+      return res.status(409).json({ message: 'Setiap pengguna hanya dapat memiliki satu guild.' });
+    }
     return next(error);
   }
 }
@@ -286,6 +297,11 @@ async function invite(req, res, next) {
       [req.params.id, targetId]
     );
     if (members.length) return res.status(409).json({ message: 'Pengguna sudah menjadi anggota guild.' });
+    const [targetMemberships] = await pool.query(
+      'SELECT guild_id FROM guild_members WHERE user_id = ? AND deleted_at IS NULL LIMIT 1',
+      [targetId]
+    );
+    if (targetMemberships.length) return res.status(409).json({ message: 'Pengguna tersebut sudah memiliki guild.' });
     const [count] = await pool.query('SELECT COUNT(*) AS total FROM guild_members WHERE guild_id = ? AND deleted_at IS NULL', [req.params.id]);
     if (Number(count[0].total) >= Number(guilds[0].max_members)) return res.status(409).json({ message: 'Guild sudah penuh.' });
     await pool.query(
@@ -322,6 +338,14 @@ async function respond(req, res, next) {
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction();
+      const [existingMemberships] = await connection.query(
+        'SELECT guild_id FROM guild_members WHERE user_id = ? AND deleted_at IS NULL LIMIT 1 FOR UPDATE',
+        [req.user.id]
+      );
+      if (existingMemberships.length) {
+        await connection.rollback();
+        return res.status(409).json({ message: 'Kamu sudah memiliki guild.' });
+      }
       const [guilds] = await connection.query('SELECT max_members FROM guilds WHERE id = ? AND deleted_at IS NULL LIMIT 1', [invitation.guild_id]);
       const [count] = await connection.query('SELECT COUNT(*) AS total FROM guild_members WHERE guild_id = ? AND deleted_at IS NULL', [invitation.guild_id]);
       if (!guilds.length || Number(count[0].total) >= Number(guilds[0].max_members)) {

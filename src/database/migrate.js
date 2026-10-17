@@ -696,6 +696,87 @@ async function migrate() {
     }
   }
 
+  // A user may belong to only one active guild. Reconcile old duplicate data
+  // before adding the database-level constraint for existing installations.
+  await connection.query(
+    `UPDATE guild_members
+     INNER JOIN guilds ON guilds.id = guild_members.guild_id
+     SET guild_members.deleted_at = CURRENT_TIMESTAMP
+     WHERE guild_members.deleted_at IS NULL AND guilds.deleted_at IS NOT NULL`
+  );
+  const [duplicateGuildUsers] = await connection.query(
+    `SELECT user_id
+     FROM guild_members
+     WHERE deleted_at IS NULL
+     GROUP BY user_id
+     HAVING COUNT(*) > 1`
+  );
+  for (const duplicate of duplicateGuildUsers) {
+    const [memberships] = await connection.query(
+      `SELECT guild_members.id, guild_members.guild_id, guilds.owner_id
+       FROM guild_members
+       INNER JOIN guilds ON guilds.id = guild_members.guild_id
+       WHERE guild_members.user_id = ?
+         AND guild_members.deleted_at IS NULL
+         AND guilds.deleted_at IS NULL
+       ORDER BY guild_members.id ASC
+       FOR UPDATE`,
+      [duplicate.user_id]
+    );
+    for (const membership of memberships.slice(1)) {
+      if (Number(membership.owner_id) === Number(duplicate.user_id)) {
+        const [replacement] = await connection.query(
+          `SELECT user_id
+           FROM guild_members
+           WHERE guild_id = ? AND user_id <> ? AND deleted_at IS NULL
+           ORDER BY id ASC
+           LIMIT 1`,
+          [membership.guild_id, duplicate.user_id]
+        );
+        if (replacement.length) {
+          await connection.query('UPDATE guilds SET owner_id = ? WHERE id = ?', [replacement[0].user_id, membership.guild_id]);
+          await connection.query(
+            "UPDATE guild_members SET role = 'owner' WHERE guild_id = ? AND user_id = ? AND deleted_at IS NULL",
+            [membership.guild_id, replacement[0].user_id]
+          );
+        } else {
+          await connection.query('UPDATE guilds SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?', [membership.guild_id]);
+          await connection.query(
+            'UPDATE guild_members SET deleted_at = CURRENT_TIMESTAMP WHERE guild_id = ? AND deleted_at IS NULL',
+            [membership.guild_id]
+          );
+          continue;
+        }
+      }
+      await connection.query('UPDATE guild_members SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?', [membership.id]);
+    }
+  }
+
+  const [guildMemberColumns] = await connection.query(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'guild_members' AND COLUMN_NAME = 'active_user_id'`,
+    [env.database.name]
+  );
+  if (!guildMemberColumns.length) {
+    await connection.query(
+      `ALTER TABLE guild_members
+       ADD COLUMN active_user_id BIGINT UNSIGNED
+       GENERATED ALWAYS AS (IF(deleted_at IS NULL, user_id, NULL)) STORED AFTER user_id`
+    );
+  }
+  const [guildMemberUniqueIndexes] = await connection.query(
+    `SELECT INDEX_NAME
+     FROM INFORMATION_SCHEMA.STATISTICS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'guild_members' AND INDEX_NAME = 'guild_members_active_user_unique'`,
+    [env.database.name]
+  );
+  if (!guildMemberUniqueIndexes.length) {
+    await connection.query(
+      'ALTER TABLE guild_members ADD UNIQUE KEY guild_members_active_user_unique (active_user_id)'
+    );
+  }
+
   const [userDifficultyColumns] = await connection.query(
     `SELECT COLUMN_NAME, COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS
      WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'users' AND COLUMN_NAME = 'difficulty'`,

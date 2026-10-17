@@ -9,6 +9,7 @@
     "seed:missions": "node src/database/seedMissions.js",
     "seed:kingdom-guilds": "node src/database/seedKingdomGuilds.js",
     "seed:muslim-habits": "node src/database/seedMuslimHabits.js",
+    "test:guild-membership": "node src/database/testGuildMembershipRule.js",
     "test": "node --test"
   },
   "keywords": [],
@@ -16,6 +17,7 @@
   "license": "ISC",
   "description": "",
   "devDependencies": {
+    "@faker-js/faker": "^10.6.0",
     "nodemon": "^3.1.14"
   },
   "dependencies": {

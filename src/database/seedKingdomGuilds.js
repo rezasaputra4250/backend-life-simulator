@@ -19,40 +19,59 @@ async function seedKingdomGuilds() {
   const ownerId = Number(process.env.SEED_GUILD_OWNER_ID || 0);
   const [owners] = ownerId
     ? await pool.query('SELECT id FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1', [ownerId])
-    : await pool.query('SELECT id FROM users WHERE deleted_at IS NULL ORDER BY id ASC LIMIT 1');
+    : await pool.query('SELECT id FROM users WHERE deleted_at IS NULL ORDER BY id ASC');
 
   if (!owners.length) {
     throw new Error('Tidak ada pengguna aktif untuk menjadi pemilik guild seed.');
   }
 
-  const selectedOwnerId = owners[0].id;
   const connection = await pool.getConnection();
   let created = 0;
+  let skipped = 0;
   try {
     await connection.beginTransaction();
-    for (const [name, description, maxMembers] of kingdomGuilds) {
+    for (let index = 0; index < kingdomGuilds.length; index += 1) {
+      const [name, description, maxMembers] = kingdomGuilds[index];
       const [existing] = await connection.query(
-        'SELECT id FROM guilds WHERE owner_id = ? AND name = ? AND deleted_at IS NULL LIMIT 1 FOR UPDATE',
-        [selectedOwnerId, name]
+        'SELECT id FROM guilds WHERE name = ? AND deleted_at IS NULL LIMIT 1 FOR UPDATE',
+        [name]
       );
-      let guildId = existing[0]?.id;
-      if (!guildId) {
-        const [result] = await connection.query(
-          'INSERT INTO guilds (owner_id, name, description, max_members) VALUES (?, ?, ?, ?)',
-          [selectedOwnerId, name, description, maxMembers]
-        );
-        guildId = result.insertId;
-        created += 1;
+      if (existing.length) {
+        skipped += 1;
+        continue;
       }
-      await connection.query(
-        `INSERT INTO guild_members (guild_id, user_id, role)
-         VALUES (?, ?, 'owner')
-         ON DUPLICATE KEY UPDATE role = 'owner', deleted_at = NULL, updated_at = CURRENT_TIMESTAMP`,
-        [guildId, selectedOwnerId]
+
+      const [availableOwners] = await connection.query(
+        `SELECT users.id
+         FROM users
+         WHERE users.deleted_at IS NULL
+           AND (? = 0 OR users.id = ?)
+           AND NOT EXISTS (
+             SELECT 1 FROM guild_members
+             WHERE guild_members.user_id = users.id AND guild_members.deleted_at IS NULL
+           )
+         ORDER BY users.id ASC
+         LIMIT 1`,
+        [ownerId, ownerId]
       );
+      if (!availableOwners.length) {
+        skipped += 1;
+        continue;
+      }
+
+      const selectedOwnerId = availableOwners[0].id;
+      const [result] = await connection.query(
+        'INSERT INTO guilds (owner_id, name, description, max_members) VALUES (?, ?, ?, ?)',
+        [selectedOwnerId, name, description, maxMembers]
+      );
+      await connection.query(
+        "INSERT INTO guild_members (guild_id, user_id, role) VALUES (?, ?, 'owner')",
+        [result.insertId, selectedOwnerId]
+      );
+      created += 1;
     }
     await connection.commit();
-    console.log(`Seeder guild kerajaan selesai. ${created} guild baru dibuat untuk owner ${selectedOwnerId}.`);
+    console.log(`Seeder guild kerajaan selesai. ${created} guild dibuat, ${skipped} dilewati karena nama sudah ada atau pemilik tersedia tidak cukup.`);
   } catch (error) {
     await connection.rollback();
     throw error;
