@@ -42,6 +42,6 @@ Difficulty lebih tinggi memiliki reward dasar lebih kecil sesuai aturan produk: 
 
 ## Validasi environment
 
-Regression test backend lulus 5/5 menggunakan Node.js absolut dari `C:\\Program Files\\nodejs`.
+Regression test backend lulus 8/8 menggunakan Node.js absolut dari `C:\\Program Files\\nodejs`.
 Expo lint dan TypeScript check mobile lulus.
 Migration berhasil dijalankan dua kali berturut-turut pada database development lokal tanpa error.
