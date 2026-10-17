@@ -21,9 +21,8 @@ Dokumen ini mencatat status implementasi backend terhadap master prompt. Audit d
 
 ## Tahap backend berikutnya
 
-- Menyelesaikan dual-write transaction untuk seluruh jalur create agar projection kompatibilitas dan domain table selalu atomik.
-- Mengubah read path aktif menjadi membaca domain table dengan fallback legacy selama masa transisi.
-- Menambah integration test untuk migration idempotency, concurrent completion, multi-level EXP, soft delete, dan explicit guild EXP.
+- Menyelesaikan dual-write transaction untuk System Mission refresh dan seluruh jalur legacy write yang masih tersisa.
+- Menambah integration test runtime untuk migration idempotency, concurrent completion, soft delete, dan explicit guild EXP.
 
 ## Domain tables
 
@@ -32,7 +31,9 @@ Dokumen ini mencatat status implementasi backend terhadap master prompt. Audit d
 - `guild_missions` menyimpan Guild Mission dan memiliki `legacy_mission_id` untuk projection kompatibilitas.
 - `missions` masih dipertahankan sebagai projection legacy selama endpoint existing dimigrasikan secara bertahap.
 - Read path mission aktif sudah memakai domain table dan mempertahankan `legacy_mission_id` sebagai ID API kompatibilitas.
+- Read path memiliki fallback eksplisit ke projection legacy jika domain mapping belum tersedia.
 - Create Personal dan Guild Mission memakai transaksi yang mencakup projection serta domain record.
+- Regression test tersedia untuk progresi level dan reward XP/non-XP/idempotency.
 
 ## Catatan balancing
 
