@@ -139,20 +139,6 @@ async function getDailyStreak(userId) {
 
 async function markExpiredMissions(userId, connection = pool) {
   await connection.query(
-    `UPDATE missions
-     SET failed = 1, failed_at = NOW()
-     WHERE user_id = ?
-       AND frequency = 'daily'
-       AND category <> 'guild'
-       AND mission_date = CURDATE()
-       AND completed = 0
-       AND failed = 0
-       AND scheduled_time IS NOT NULL
-       AND deleted_at IS NULL
-       AND scheduled_time < CURTIME()`,
-    [userId]
-  );
-  await connection.query(
     `UPDATE system_mission_instances
      SET failed = 1, failed_at = NOW(), updated_at = CURRENT_TIMESTAMP
      WHERE user_id = ? AND mission_date = CURDATE() AND completed = 0 AND failed = 0
@@ -164,6 +150,20 @@ async function markExpiredMissions(userId, connection = pool) {
      SET failed = 1, failed_at = NOW(), updated_at = CURRENT_TIMESTAMP
      WHERE user_id = ? AND mission_date = CURDATE() AND completed = 0 AND failed = 0
        AND scheduled_time IS NOT NULL AND scheduled_time < CURTIME() AND deleted_at IS NULL`,
+    [userId]
+  );
+  await connection.query(
+    `UPDATE missions
+     SET failed = 1, failed_at = NOW()
+     WHERE user_id = ?
+       AND frequency = 'daily'
+       AND category <> 'guild'
+       AND mission_date = CURDATE()
+       AND completed = 0
+       AND failed = 0
+       AND scheduled_time IS NOT NULL
+       AND deleted_at IS NULL
+       AND scheduled_time < CURTIME()`,
     [userId]
   );
 }
