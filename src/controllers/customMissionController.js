@@ -1,7 +1,7 @@
 const { validationResult } = require('express-validator');
 const pool = require('../config/database');
 const { recordMissionReward } = require('../services/rewardService');
-const { registerPersonalMission } = require('../services/missionDomainService');
+const { registerPersonalMission, syncMissionStatus } = require('../services/missionDomainService');
 
 const allowedDifficulties = ['easy', 'normal', 'hard', 'expert'];
 function invalid(req, res) {
@@ -64,6 +64,7 @@ async function complete(req, res, next) {
     if (mission.failed) { await connection.rollback(); return res.status(409).json({ message: 'Misi sudah gagal.' }); }
     const reward = await recordMissionReward(connection, req.user.id, mission);
     await connection.query('UPDATE missions SET completed = 1, completed_at = NOW() WHERE id = ?', [mission.id]);
+    await syncMissionStatus(connection, { ...mission, completed: true, completed_at: new Date() });
     const progression = reward.progression;
     await connection.query('INSERT INTO notifications (user_id, type, title, body) VALUES (?, \'reward\', \'Misi selesai\', ?)', [req.user.id, `Kamu mendapatkan ${mission.reward} XP dari misi: ${mission.title}.`]);
     await connection.commit();

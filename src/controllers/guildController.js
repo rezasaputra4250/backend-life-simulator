@@ -49,17 +49,17 @@ async function list(req, res, next) {
       [req.user.id]
     );
     const [missions] = await pool.query(
-      `SELECT missions.id, missions.guild_id, missions.user_id AS creator_id,
-              missions.title, missions.detail, missions.difficulty,
-              missions.target_progress, missions.current_progress,
-              missions.reward AS reward_xp, DATE_FORMAT(missions.mission_date, '%Y-%m-%d') AS mission_date,
-              missions.scheduled_time,
-              missions.status, missions.completed_at
-       FROM missions
-       WHERE missions.deleted_at IS NULL AND missions.category = 'guild'
-         AND missions.guild_id IN (SELECT guild_id FROM guild_members WHERE user_id = ? AND deleted_at IS NULL)
-         AND missions.status = 'active'
-       ORDER BY missions.mission_date ASC, missions.id DESC`,
+      `SELECT guild_missions.legacy_mission_id AS id, guild_missions.guild_id,
+              guild_missions.creator_id, guild_missions.title, guild_missions.detail,
+              guild_missions.difficulty, guild_missions.target_progress,
+              guild_missions.current_progress, guild_missions.reward_xp,
+              DATE_FORMAT(guild_missions.mission_date, '%Y-%m-%d') AS mission_date,
+              guild_missions.scheduled_time, guild_missions.status, guild_missions.completed_at
+       FROM guild_missions
+       WHERE guild_missions.deleted_at IS NULL
+         AND guild_missions.guild_id IN (SELECT guild_id FROM guild_members WHERE user_id = ? AND deleted_at IS NULL)
+         AND guild_missions.status = 'active'
+       ORDER BY guild_missions.mission_date ASC, guild_missions.id DESC`,
       [req.user.id]
     );
 

@@ -549,6 +549,10 @@ async function migrate() {
       current_progress INT UNSIGNED NOT NULL DEFAULT 0,
       reward_xp INT UNSIGNED NOT NULL DEFAULT 25,
       grant_player_experience TINYINT(1) NOT NULL DEFAULT 0,
+      scheduled_time TIME NULL,
+      reward_type ENUM('xp', 'skill', 'item', 'badge') NOT NULL DEFAULT 'xp',
+      reward_name VARCHAR(160) NULL,
+      reward_key VARCHAR(100) NULL,
       mission_date DATE NOT NULL,
       status ENUM('active', 'completed', 'cancelled') NOT NULL DEFAULT 'active',
       completed_at DATETIME NULL,
@@ -713,7 +717,7 @@ async function migrate() {
     `SELECT COLUMN_NAME
      FROM INFORMATION_SCHEMA.COLUMNS
      WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'guild_missions'
-       AND COLUMN_NAME IN ('legacy_mission_id', 'grant_player_experience')`,
+       AND COLUMN_NAME IN ('legacy_mission_id', 'grant_player_experience', 'scheduled_time', 'reward_type', 'reward_name', 'reward_key')`,
     [env.database.name]
   );
   const guildMissionDomainColumnNames = guildMissionDomainColumns.map((column) => column.COLUMN_NAME);
@@ -722,6 +726,18 @@ async function migrate() {
   }
   if (!guildMissionDomainColumnNames.includes('grant_player_experience')) {
     await connection.query('ALTER TABLE guild_missions ADD COLUMN grant_player_experience TINYINT(1) NOT NULL DEFAULT 0 AFTER reward_xp');
+  }
+  if (!guildMissionDomainColumnNames.includes('scheduled_time')) {
+    await connection.query('ALTER TABLE guild_missions ADD COLUMN scheduled_time TIME NULL AFTER grant_player_experience');
+  }
+  if (!guildMissionDomainColumnNames.includes('reward_type')) {
+    await connection.query("ALTER TABLE guild_missions ADD COLUMN reward_type ENUM('xp', 'skill', 'item', 'badge') NOT NULL DEFAULT 'xp' AFTER scheduled_time");
+  }
+  if (!guildMissionDomainColumnNames.includes('reward_name')) {
+    await connection.query('ALTER TABLE guild_missions ADD COLUMN reward_name VARCHAR(160) NULL AFTER reward_type');
+  }
+  if (!guildMissionDomainColumnNames.includes('reward_key')) {
+    await connection.query('ALTER TABLE guild_missions ADD COLUMN reward_key VARCHAR(100) NULL AFTER reward_name');
   }
 
   const difficultyTables = ['missions', 'mission_templates', 'guild_missions'];
@@ -984,7 +1000,11 @@ async function migrate() {
   await connection.query(
     `UPDATE guild_missions
      INNER JOIN missions ON missions.legacy_guild_mission_id = guild_missions.id
-     SET guild_missions.legacy_mission_id = missions.id
+     SET guild_missions.legacy_mission_id = missions.id,
+         guild_missions.scheduled_time = missions.scheduled_time,
+         guild_missions.reward_type = missions.reward_type,
+         guild_missions.reward_name = missions.reward_name,
+         guild_missions.reward_key = missions.reward_key
      WHERE guild_missions.legacy_mission_id IS NULL`
   );
 

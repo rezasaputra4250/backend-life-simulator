@@ -66,8 +66,9 @@ async function registerGuildMission(connection, legacyMissionId, mission) {
   await connection.query(
     `INSERT IGNORE INTO guild_missions
        (legacy_mission_id, guild_id, creator_id, title, detail, difficulty, target_progress,
-        current_progress, reward_xp, grant_player_experience, mission_date, status, completed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        current_progress, reward_xp, grant_player_experience, scheduled_time, reward_type,
+        reward_name, reward_key, mission_date, status, completed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       legacyMissionId,
       mission.guild_id,
@@ -79,6 +80,10 @@ async function registerGuildMission(connection, legacyMissionId, mission) {
       mission.current_progress || 0,
       mission.reward || 0,
       mission.grant_player_experience ? 1 : 0,
+      mission.scheduled_time || null,
+      mission.reward_type || 'xp',
+      mission.reward_name || null,
+      mission.reward_key || null,
       mission.mission_date,
       mission.status || 'active',
       mission.completed_at || null,
