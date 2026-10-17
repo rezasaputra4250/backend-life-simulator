@@ -41,4 +41,6 @@ Difficulty lebih tinggi memiliki reward dasar lebih kecil sesuai aturan produk: 
 
 ## Validasi environment
 
-Validasi diff berhasil. `npm test`, lint, dan TypeScript check belum dapat dijalankan pada environment saat ini karena executable `node` tidak tersedia.
+Regression test backend lulus 5/5 menggunakan Node.js absolut dari `C:\\Program Files\\nodejs`.
+Expo lint dan TypeScript check mobile lulus.
+Migration berhasil dijalankan dua kali berturut-turut pada database development lokal tanpa error.
