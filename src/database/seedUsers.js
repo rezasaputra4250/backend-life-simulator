@@ -3,6 +3,8 @@ require('dotenv').config();
 const bcrypt = require('bcryptjs');
 const pool = require('../config/database');
 const { faker } = require('@faker-js/faker');
+const { allMissionSeeds } = require('../constants/missions');
+const { ensureSystemMission } = require('../services/missionDomainService');
 
 async function seedUsers() {
   const userCount = Math.max(10, Number(process.env.SEED_USER_COUNT || 100));
@@ -73,6 +75,56 @@ async function seedUsers() {
      ), updated_at = CURRENT_TIMESTAMP
      WHERE email LIKE 'test%@example.com' AND deleted_at IS NULL AND class_id IS NULL`
   );
+
+  const [seededUsers] = await pool.query(
+    `SELECT id, difficulty, class_id
+     FROM users
+     WHERE email LIKE 'test%@example.com' AND deleted_at IS NULL
+     ORDER BY id ASC`
+  );
+
+  for (const user of seededUsers) {
+    await pool.query(
+      `INSERT INTO user_stats (user_id)
+       VALUES (?)
+       ON DUPLICATE KEY UPDATE deleted_at = NULL, updated_at = CURRENT_TIMESTAMP`,
+      [user.id]
+    );
+    await pool.query(
+      `INSERT INTO user_profiles (user_id)
+       VALUES (?)
+       ON DUPLICATE KEY UPDATE deleted_at = NULL, updated_at = CURRENT_TIMESTAMP`,
+      [user.id]
+    );
+    await pool.query(
+      `INSERT INTO notification_preferences (user_id)
+       VALUES (?)
+       ON DUPLICATE KEY UPDATE deleted_at = NULL, updated_at = CURRENT_TIMESTAMP`,
+      [user.id]
+    );
+    await pool.query(
+      `INSERT IGNORE INTO user_skills (user_id, skill_id)
+       SELECT ?, skills.id
+       FROM skills
+       WHERE skills.name IN ('productivity', 'communication')`,
+      [user.id]
+    );
+    await pool.query(
+      `UPDATE user_skills
+       INNER JOIN skills ON skills.id = user_skills.skill_id
+       SET user_skills.deleted_at = NULL, user_skills.updated_at = CURRENT_TIMESTAMP
+       WHERE user_skills.user_id = ? AND skills.name IN ('productivity', 'communication')`,
+      [user.id]
+    );
+
+    for (const mission of allMissionSeeds) {
+      await ensureSystemMission(pool, user.id, user.difficulty || 'easy', {
+        ...mission,
+        frequency: mission.frequency || 'daily',
+        duration_minutes: mission.duration_minutes || 15,
+      });
+    }
+  }
 
   console.log(`Seeder user selesai: ${userCount} user tersedia dengan email test1@example.com sampai test${userCount}@example.com.`);
 }
