@@ -331,6 +331,87 @@ async function me(req, res) {
   });
 }
 
+async function updateProfile(req, res, next) {
+  try {
+    const errorResponse = validationErrorResponse(req, res);
+    if (errorResponse) return errorResponse;
+
+    const userFields = ['name', 'email'];
+    const profileFields = [
+      'employee_number', 'position', 'department', 'phone', 'gender', 'birth_date',
+      'avatar_url', 'address', 'city', 'province', 'country', 'postal_code', 'bio',
+    ];
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      const [users] = await connection.query('SELECT id FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1 FOR UPDATE', [req.user.id]);
+      if (!users.length) {
+        await connection.rollback();
+        return res.status(404).json({ message: 'Pengguna tidak ditemukan.' });
+      }
+
+      const userUpdates = userFields.filter((field) => req.body[field] !== undefined);
+      if (userUpdates.length) {
+        const values = userUpdates.map((field) => req.body[field]);
+        if (req.body.email !== undefined) {
+          const [duplicates] = await connection.query(
+            'SELECT id FROM users WHERE email = ? AND id <> ? AND deleted_at IS NULL LIMIT 1',
+            [req.body.email, req.user.id]
+          );
+          if (duplicates.length) {
+            await connection.rollback();
+            return res.status(409).json({ message: 'Email sudah digunakan akun lain.' });
+          }
+        }
+        await connection.query(
+          `UPDATE users SET ${userUpdates.map((field) => `${field} = ?`).join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+          [...values, req.user.id]
+        );
+      }
+
+      const profileUpdates = profileFields.filter((field) => req.body[field] !== undefined);
+      if (profileUpdates.length) {
+        await connection.query(
+          `UPDATE user_profiles SET ${profileUpdates.map((field) => `${field} = ?`).join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND deleted_at IS NULL`,
+          [...profileUpdates.map((field) => req.body[field] || null), req.user.id]
+        );
+      }
+
+      if (!userUpdates.length && !profileUpdates.length) {
+        await connection.rollback();
+        return res.status(422).json({ message: 'Tidak ada data profil yang diubah.' });
+      }
+      await connection.commit();
+      return res.json({ message: 'Profil berhasil diperbarui.' });
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function changePassword(req, res, next) {
+  try {
+    const errorResponse = validationErrorResponse(req, res);
+    if (errorResponse) return errorResponse;
+    const { current_password, new_password } = req.body;
+    const [users] = await pool.query('SELECT password FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1', [req.user.id]);
+    if (!users.length) return res.status(404).json({ message: 'Pengguna tidak ditemukan.' });
+    if (!(await bcrypt.compare(current_password, users[0].password))) {
+      return res.status(422).json({ message: 'Password saat ini tidak sesuai.' });
+    }
+    const hashedPassword = await bcrypt.hash(new_password, 12);
+    await pool.query('UPDATE users SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL', [hashedPassword, req.user.id]);
+    return res.json({ message: 'Password berhasil diubah.' });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function forgotPassword(req, res, next) {
   try {
     const errorResponse = validationErrorResponse(req, res);
@@ -423,6 +504,8 @@ module.exports = {
   register,
   login,
   me,
+  updateProfile,
+  changePassword,
   forgotPassword,
   resetPassword,
 };

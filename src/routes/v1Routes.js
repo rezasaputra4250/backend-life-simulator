@@ -17,6 +17,20 @@ const adminController = require('../controllers/adminController');
 const router = express.Router();
 router.use('/auth', authRoutes);
 router.get('/me', authenticate, authController.me);
+router.patch('/me/profile', authenticate, [
+  body('name').optional().isString().trim().isLength({ min: 2, max: 160 }).withMessage('Nama minimal 2 karakter.'),
+  body('email').optional().isEmail().normalizeEmail().withMessage('Format email tidak valid.'),
+  body('employee_number').optional({ nullable: true }).isString().trim().isLength({ max: 80 }).withMessage('Nomor karyawan maksimal 80 karakter.'),
+  body('position').optional({ nullable: true }).isString().trim().isLength({ max: 120 }).withMessage('Posisi maksimal 120 karakter.'),
+  body('department').optional({ nullable: true }).isString().trim().isLength({ max: 120 }).withMessage('Departemen maksimal 120 karakter.'),
+  body('phone').optional({ nullable: true }).isString().trim().isLength({ max: 40 }).withMessage('Nomor telepon maksimal 40 karakter.'),
+  body('bio').optional({ nullable: true }).isString().trim().isLength({ max: 2000 }).withMessage('Bio maksimal 2000 karakter.'),
+], authController.updateProfile);
+router.patch('/me/password', authenticate, [
+  body('current_password').isString().notEmpty().withMessage('Password saat ini wajib diisi.'),
+  body('new_password').isString().isLength({ min: 8 }).withMessage('Password baru minimal 8 karakter.'),
+  body('confirm_password').isString().custom((value, { req }) => value === req.body.new_password).withMessage('Konfirmasi password tidak sama.'),
+], authController.changePassword);
 router.use('/missions', missionRoutes);
 router.use('/inventory', inventoryRoutes);
 router.use('/friends', friendRoutes);
