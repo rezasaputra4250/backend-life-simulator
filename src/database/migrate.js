@@ -4,6 +4,7 @@ const mysql = require('mysql2/promise');
 const env = require('../config/env');
 const { roles } = require('../constants/roles');
 const { skills } = require('../constants/skills');
+const { ensureSystemMission } = require('../services/missionDomainService');
 
 function experienceForLevel(level) {
   let requirement = 100;
@@ -1227,21 +1228,17 @@ async function migrate() {
      WHERE skills.name IN ('productivity', 'communication')`
   );
 
-  for (const mission of require('../constants/missions').allMissionSeeds) {
-    await connection.query(
-      `INSERT INTO missions
-         (user_id, difficulty, mission_date, frequency, scheduled_time, title, detail, reward, reward_type, reward_name, reward_key)
-       SELECT users.id, users.difficulty,
-              CASE ?
-                WHEN 'daily' THEN CURDATE()
-                WHEN 'weekly' THEN DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)
-                ELSE DATE_FORMAT(CURDATE(), '%Y-%m-01')
-              END,
-              ?, ?, ?, ?, ?, ?, ?, ? FROM users
-       ON DUPLICATE KEY UPDATE
-         frequency = VALUES(frequency), scheduled_time = VALUES(scheduled_time), detail = VALUES(detail)`,
-      [mission.frequency || 'daily', mission.frequency || 'daily', mission.scheduled_time, mission.title, mission.detail, mission.reward, mission.reward_type, mission.reward_name, mission.reward_key]
-    );
+  const [activeUsers] = await connection.query(
+    'SELECT id, difficulty FROM users WHERE deleted_at IS NULL ORDER BY id ASC'
+  );
+  for (const user of activeUsers) {
+    for (const mission of require('../constants/missions').allMissionSeeds) {
+      await ensureSystemMission(connection, user.id, user.difficulty || 'easy', {
+        ...mission,
+        frequency: mission.frequency || 'daily',
+        duration_minutes: mission.duration_minutes || 15,
+      });
+    }
   }
 
   await connection.end();
