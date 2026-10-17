@@ -40,9 +40,15 @@ async function selectClass(req, res, next) {
         await connection.rollback();
         return res.status(200).json({ message: 'Class karakter sudah dipilih sebelumnya.', data: chosen });
       }
-      if (existing.length && existing[0].deleted_at === null) {
-        await connection.rollback();
-        return res.status(409).json({ message: 'Class karakter sudah dipilih. Class tidak dapat diganti.' });
+
+      let previousClass = null;
+      if (existing.length && existing[0].class_id) {
+        const [previousClasses] = await connection.query(
+          `SELECT strength_bonus, intelligence_bonus, agility_bonus, stamina_bonus, luck_bonus
+           FROM player_classes WHERE id = ? LIMIT 1`,
+          [existing[0].class_id]
+        );
+        previousClass = previousClasses[0] || null;
       }
       if (existing.length) {
         await connection.query(
@@ -55,13 +61,21 @@ async function selectClass(req, res, next) {
         await connection.query('INSERT INTO user_classes (user_id, class_id) VALUES (?, ?)', [req.user.id, chosen.id]);
       }
       await connection.query(
-        `UPDATE user_stats SET strength = strength + ?, intelligence = intelligence + ?, agility = agility + ?,
-         stamina = stamina + ?, luck = luck + ? WHERE user_id = ?`,
-        [chosen.strength_bonus, chosen.intelligence_bonus, chosen.agility_bonus, chosen.stamina_bonus, chosen.luck_bonus, req.user.id]
+        `UPDATE user_stats SET strength = GREATEST(0, strength + ?), intelligence = GREATEST(0, intelligence + ?),
+         agility = GREATEST(0, agility + ?), stamina = GREATEST(0, stamina + ?), luck = GREATEST(0, luck + ?)
+         WHERE user_id = ?`,
+        [
+          Number(chosen.strength_bonus) - Number(previousClass?.strength_bonus || 0),
+          Number(chosen.intelligence_bonus) - Number(previousClass?.intelligence_bonus || 0),
+          Number(chosen.agility_bonus) - Number(previousClass?.agility_bonus || 0),
+          Number(chosen.stamina_bonus) - Number(previousClass?.stamina_bonus || 0),
+          Number(chosen.luck_bonus) - Number(previousClass?.luck_bonus || 0),
+          req.user.id,
+        ]
       );
       await connection.commit();
     } catch (error) { await connection.rollback(); throw error; } finally { connection.release(); }
-    res.status(201).json({ message: 'Class karakter berhasil dipilih.', data: chosen });
+    res.status(200).json({ message: 'Class karakter berhasil diperbarui.', data: chosen });
   } catch (error) { next(error); }
 }
 
