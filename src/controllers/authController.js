@@ -124,7 +124,10 @@ async function register(req, res, next) {
     const errorResponse = validationErrorResponse(req, res);
     if (errorResponse) return errorResponse;
 
-    const { name, email, password, role, company_id, referral_code } = req.body;
+    const {
+      name, email, password, role, company_id, referral_code,
+      birth_date, gender, phone, address, city, province,
+    } = req.body;
     const [existingUsers] = await pool.query(
       'SELECT id FROM users WHERE email = ? AND deleted_at IS NULL LIMIT 1',
       [email]
@@ -208,9 +211,11 @@ async function register(req, res, next) {
     await pool.query('INSERT INTO user_stats (user_id) VALUES (?)', [
       result.insertId,
     ]);
-    await pool.query('INSERT INTO user_profiles (user_id) VALUES (?)', [
-      result.insertId,
-    ]);
+    await pool.query(
+      `INSERT INTO user_profiles (user_id, birth_date, gender, phone, address, city, province)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [result.insertId, birth_date || null, gender || null, phone || null, address || null, city || null, province || null]
+    );
     await pool.query('INSERT INTO notification_preferences (user_id) VALUES (?)', [
       result.insertId,
     ]);
@@ -234,13 +239,13 @@ async function register(req, res, next) {
       employee_number: null,
       position: null,
       department: null,
-      phone: null,
-      gender: null,
-      birth_date: null,
+      phone: phone || null,
+      gender: gender || null,
+      birth_date: birth_date || null,
       avatar_url: null,
-      address: null,
-      city: null,
-      province: null,
+      address: address || null,
+      city: city || null,
+      province: province || null,
       country: 'Indonesia',
       postal_code: null,
       joined_at: null,

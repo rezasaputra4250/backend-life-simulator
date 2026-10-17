@@ -14,6 +14,34 @@ router.post(
     body('password')
       .isLength({ min: 8 })
       .withMessage('Password minimal 8 karakter.'),
+    body('birth_date')
+      .optional({ nullable: true })
+      .isISO8601()
+      .withMessage('Tanggal lahir tidak valid.'),
+    body('gender')
+      .optional({ nullable: true })
+      .isIn(['male', 'female', 'other'])
+      .withMessage('Jenis kelamin tidak valid.'),
+    body('phone')
+      .optional({ nullable: true })
+      .trim()
+      .isLength({ max: 40 })
+      .withMessage('Nomor telepon terlalu panjang.'),
+    body('address')
+      .optional({ nullable: true })
+      .trim()
+      .isLength({ max: 500 })
+      .withMessage('Alamat terlalu panjang.'),
+    body('city')
+      .optional({ nullable: true })
+      .trim()
+      .isLength({ max: 120 })
+      .withMessage('Kota terlalu panjang.'),
+    body('province')
+      .optional({ nullable: true })
+      .trim()
+      .isLength({ max: 120 })
+      .withMessage('Provinsi terlalu panjang.'),
     body('role')
       .optional()
       .isIn(roleNames)
