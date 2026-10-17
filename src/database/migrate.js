@@ -487,6 +487,17 @@ async function migrate() {
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS difficulty_level_experiences (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      difficulty ENUM('easy', 'normal', 'hard', 'expert') NOT NULL,
+      level INT UNSIGNED NOT NULL,
+      experience_to_next_level BIGINT UNSIGNED NOT NULL DEFAULT 0,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY difficulty_level_experience_unique (difficulty, level),
+      INDEX difficulty_level_experience_level_index (level)
+    );
+
     CREATE TABLE IF NOT EXISTS experience_transactions (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
       user_id BIGINT UNSIGNED NOT NULL,
@@ -619,7 +630,7 @@ async function migrate() {
     'user_badges', 'skills', 'user_skills',
     'player_classes', 'player_class_progressions', 'user_classes',
     'mission_templates', 'notifications', 'notification_preferences',
-    'reward_transactions', 'difficulty_configs', 'experience_transactions',
+    'reward_transactions', 'difficulty_configs', 'difficulty_level_experiences', 'experience_transactions',
     'guild_missions', 'guild_mission_contributions', 'mission_contributions',
     'system_mission_instances', 'personal_missions',
   ];
@@ -661,6 +672,19 @@ async function migrate() {
         `ALTER TABLE \`${tableName}\` ADD INDEX \`${tableName}_deleted_at_index\` (deleted_at)`
       );
     }
+  }
+
+  const [difficultyExperienceColumns] = await connection.query(
+    `SELECT COLUMN_TYPE
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'difficulty_level_experiences'
+       AND COLUMN_NAME = 'experience_to_next_level'`,
+    [env.database.name]
+  );
+  if (difficultyExperienceColumns.length && difficultyExperienceColumns[0].COLUMN_TYPE !== 'bigint unsigned') {
+    await connection.query(
+      'ALTER TABLE difficulty_level_experiences MODIFY COLUMN experience_to_next_level BIGINT UNSIGNED NOT NULL DEFAULT 0'
+    );
   }
 
   // A user may belong to only one active guild. Reconcile old duplicate data

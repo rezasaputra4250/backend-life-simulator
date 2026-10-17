@@ -2,11 +2,13 @@ require('dotenv').config();
 
 const pool = require('../config/database');
 const seedUsers = require('./seedUsers');
+const seedDifficultyExperience = require('./seedDifficultyExperience');
 const seedMissions = require('./seedMissions');
 const seedMuslimHabits = require('./seedMuslimHabits');
 const seedKingdomGuilds = require('./seedKingdomGuilds');
 
 async function seed() {
+  await seedDifficultyExperience();
   await seedUsers();
   await seedMissions();
   await seedMuslimHabits();
