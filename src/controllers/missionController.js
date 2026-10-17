@@ -51,25 +51,6 @@ function formatMission(mission) {
   };
 }
 
-function formatTodoMission(todo) {
-  const dueDate = todo.due_date ? String(todo.due_date).replace('T', ' ') : null;
-  return {
-    id: -Number(todo.todo_id),
-    todo_id: Number(todo.todo_id),
-    mission_date: dueDate ? dueDate.slice(0, 10) : null,
-    frequency: 'daily',
-    scheduled_time: dueDate ? dueDate.slice(11, 19) : null,
-    category: 'personal',
-    title: todo.title,
-    detail: todo.description,
-    reward: { type: 'xp', key: 'xp', name: 'To-do pribadi', description: null, icon_key: 'xp', amount: 0 },
-    completed: todo.status === 'completed',
-    failed: false,
-    completed_at: todo.completed_at,
-    failed_at: null,
-  };
-}
-
 function formatGuildMission(mission) {
   return {
     id: -1000000000 - Number(mission.id),
@@ -172,18 +153,7 @@ async function list(req, res, next) {
        ORDER BY missions.scheduled_time IS NULL ASC, missions.scheduled_time ASC, missions.id ASC`,
       [req.user.id, req.user.id]
     );
-    const [canonicalTodoItems] = await pool.query(
-      `SELECT todo_items.id AS todo_id, todo_items.title, todo_items.description,
-              todo_items.status, DATE_FORMAT(todo_items.due_date, '%Y-%m-%d %H:%i:%s') AS due_date,
-              todo_items.completed_at
-       FROM todo_items INNER JOIN todo_lists ON todo_lists.id = todo_items.todo_list_id
-       WHERE todo_lists.user_id = ? AND todo_lists.deleted_at IS NULL
-         AND todo_items.deleted_at IS NULL AND todo_items.status <> 'cancelled'
-       ORDER BY todo_items.due_date IS NULL ASC, todo_items.due_date ASC, todo_items.id ASC`,
-      [req.user.id]
-    );
-    const canonicalTodoMissions = canonicalTodoItems.map(formatTodoMission);
-    const canonicalCombined = canonicalMissions.map(formatMission).concat(canonicalTodoMissions).sort((left, right) => {
+    const canonicalCombined = canonicalMissions.map(formatMission).sort((left, right) => {
       if (!left.scheduled_time && !right.scheduled_time) return Number(left.id) - Number(right.id);
       if (!left.scheduled_time) return 1;
       if (!right.scheduled_time) return -1;
@@ -283,20 +253,8 @@ async function list(req, res, next) {
       ORDER BY active_missions.scheduled_time IS NULL ASC, active_missions.scheduled_time ASC, active_missions.id ASC`,
       [req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, req.user.id]
     );
-    const [todoItems] = await pool.query(
-      `SELECT todo_items.id AS todo_id, todo_items.title, todo_items.description,
-              todo_items.status, DATE_FORMAT(todo_items.due_date, '%Y-%m-%d %H:%i:%s') AS due_date,
-              todo_items.completed_at
-       FROM todo_items
-       INNER JOIN todo_lists ON todo_lists.id = todo_items.todo_list_id
-       WHERE todo_lists.user_id = ? AND todo_lists.deleted_at IS NULL
-         AND todo_items.deleted_at IS NULL AND todo_items.status <> 'cancelled'
-       ORDER BY todo_items.due_date IS NULL ASC, todo_items.due_date ASC, todo_items.id ASC`,
-      [req.user.id]
-    );
     const streakDays = await getDailyStreak(req.user.id);
-    const todoMissions = todoItems.map(formatTodoMission);
-    const combinedMissions = missions.map(formatMission).concat(todoMissions).sort((left, right) => {
+    const combinedMissions = missions.map(formatMission).sort((left, right) => {
       if (!left.scheduled_time && !right.scheduled_time) return Number(left.id) - Number(right.id);
       if (!left.scheduled_time) return 1;
       if (!right.scheduled_time) return -1;

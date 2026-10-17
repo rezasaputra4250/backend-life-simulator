@@ -393,44 +393,6 @@ async function migrate() {
         ON DELETE CASCADE
     );
 
-    CREATE TABLE IF NOT EXISTS todo_lists (
-      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-      user_id BIGINT UNSIGNED NOT NULL,
-      title VARCHAR(160) NOT NULL,
-      description TEXT NULL,
-      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      INDEX todo_lists_user_id_index (user_id),
-      CONSTRAINT todo_lists_user_id_foreign
-        FOREIGN KEY (user_id) REFERENCES users(id)
-        ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS todo_items (
-      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-      todo_list_id BIGINT UNSIGNED NOT NULL,
-      assigned_to BIGINT UNSIGNED NULL,
-      title VARCHAR(180) NOT NULL,
-      description TEXT NULL,
-      status ENUM('pending', 'in_progress', 'completed', 'cancelled') NOT NULL DEFAULT 'pending',
-      priority ENUM('low', 'medium', 'high', 'urgent') NOT NULL DEFAULT 'medium',
-      due_date DATETIME NULL,
-      completed_at DATETIME NULL,
-      sort_order INT UNSIGNED NOT NULL DEFAULT 0,
-      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      INDEX todo_items_todo_list_id_index (todo_list_id),
-      INDEX todo_items_assigned_to_index (assigned_to),
-      INDEX todo_items_status_index (status),
-      INDEX todo_items_due_date_index (due_date),
-      CONSTRAINT todo_items_todo_list_id_foreign
-        FOREIGN KEY (todo_list_id) REFERENCES todo_lists(id)
-        ON DELETE CASCADE,
-      CONSTRAINT todo_items_assigned_to_foreign
-        FOREIGN KEY (assigned_to) REFERENCES users(id)
-        ON DELETE SET NULL
-    );
-
     CREATE TABLE IF NOT EXISTS player_classes (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
       name VARCHAR(80) NOT NULL UNIQUE,
@@ -643,13 +605,18 @@ async function migrate() {
     );
   `);
 
+  // The legacy to-do module has been replaced by the unified missions domain.
+  // Drop both tables so existing installations converge with a fresh schema.
+  await connection.query('DROP TABLE IF EXISTS todo_items');
+  await connection.query('DROP TABLE IF EXISTS todo_lists');
+
   // Keep timestamps and soft deletes consistent for new and existing tables.
   const managedTables = [
     'roles', 'companies', 'users', 'user_profiles', 'affiliate_referrals',
     'friend_requests', 'friendships', 'parties', 'party_members', 'guilds',
     'guild_members', 'guild_invitations', 'password_resets', 'user_stats',
     'user_experience_logs', 'missions', 'user_rewards', 'user_inventory',
-    'user_badges', 'skills', 'user_skills', 'todo_lists', 'todo_items',
+    'user_badges', 'skills', 'user_skills',
     'player_classes', 'player_class_progressions', 'user_classes',
     'mission_templates', 'notifications', 'notification_preferences',
     'reward_transactions', 'difficulty_configs', 'experience_transactions',
