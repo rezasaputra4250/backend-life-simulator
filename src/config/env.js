@@ -2,6 +2,7 @@ require('dotenv').config();
 
 module.exports = {
   appName: process.env.APP_NAME || 'Backend API',
+  appEnv: process.env.APP_ENV || process.env.NODE_ENV || 'local',
   nodeEnv: process.env.NODE_ENV || 'development',
   host: process.env.HOST || '0.0.0.0',
   port: Number(process.env.PORT || 5000),
