@@ -14,24 +14,13 @@ Workflow di repo ini membantu memeriksa proses `feature/*` → `local` → `deve
 
 ## Ruleset untuk `main`, `master`, dan `staging`
 
+File import siap pakai tersedia di `.github/rulesets/branch-protection.json`.
+
 1. Buka `Settings` -> `Rules` -> `Rulesets` atau `Settings` -> `Branches`.
-2. Buat aturan untuk branch `main`, `master`, dan `staging`.
-3. Aktifkan `Require a pull request before merging`.
-4. Aktifkan `Require status checks to pass`.
-5. Pilih status check `Validasi aturan Pull Request`.
-6. Pilih status check `Validasi file sensitif`.
-7. Pilih status check `Pemeriksaan Node.js backend`.
-8. Pilih status check `Audit dependency`.
-9. Pilih status check `Scan keamanan Semgrep`.
-10. Pilih status check `Scan secret dengan Gitleaks`.
-11. Pilih status check `Analisis keamanan CodeQL`.
-12. Aktifkan `Require approvals` dan tentukan minimal `1` approval.
-13. Aktifkan `Require review from Code Owners`. File `.github/CODEOWNERS` sudah diset agar hanya `@rezasaputra4250` yang menjadi owner semua perubahan.
-14. Aktifkan `Restrict updates` atau `Restrict who can push to matching branches`.
-15. Masukkan user/team yang boleh update `main`, `master`, dan `staging`.
-16. Aktifkan `Block force pushes`.
-17. Aktifkan `Restrict deletions`.
-18. Jika tersedia, aktifkan `Do not allow bypassing the above settings`.
+2. Pilih `Import a ruleset` dan unggah `.github/rulesets/branch-protection.json`.
+3. Pastikan target branch mencakup `local`, `develop`, `staging`, `main`, dan `master`.
+4. Pastikan `Enforcement status` bernilai `Active`.
+5. Periksa status check dan review yang sudah terisi dari file JSON.
 
 ## Ruleset untuk `develop`
 
@@ -49,6 +38,8 @@ Workflow di repo ini membantu memeriksa proses `feature/*` → `local` → `deve
 12. Aktifkan `Restrict deletions`.
 
 ## Ruleset untuk `local`
+
+Ruleset import yang sama juga melindungi `local` dan memastikan perubahan masuk melalui Pull Request dari branch kerja.
 
 1. `local` hanya boleh menerima Pull Request dari branch kerja seperti `feature/*`, `bugfix/*`, `hotfix/*`, `fix/*`, `chore/*`, atau `release/*`.
 2. Aktifkan `Require a pull request before merging`.
