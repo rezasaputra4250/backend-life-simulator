@@ -45,8 +45,11 @@
 
 ## Standar Pull Request
 
-- Gunakan judul singkat dengan format Conventional Commits.
-- Gunakan struktur sederhana: `Tujuan`, `Perubahan`, `Validasi`, dan `Target`.
-- Jelaskan hanya perubahan yang benar-benar ada di branch tersebut.
+- Gunakan Bahasa Indonesia untuk judul dan isi PR. Istilah teknis seperti nama branch, endpoint, field, dan `APP_ENV` boleh tetap dalam Bahasa Inggris.
+- Gunakan judul singkat dengan format Conventional Commits, misalnya `feat: tambahkan filter misi berdasarkan agama`.
+- Gunakan struktur sederhana: `Tujuan`, `Perubahan`, `Validasi`, dan `Target merge`.
+- Jelaskan konteks masalah, perubahan yang dibuat, dan dampaknya dengan kalimat singkat.
+- Gunakan daftar perubahan yang spesifik agar reviewer mudah memeriksa scope PR.
 - Cantumkan keterbatasan validasi secara jujur dan jangan menyatakan test lulus jika belum dijalankan.
+- Jelaskan langkah manual yang perlu dilakukan reviewer jika perubahan membutuhkan konfigurasi atau migrasi.
 - Semua PR fitur dan perbaikan diarahkan ke `local`.
