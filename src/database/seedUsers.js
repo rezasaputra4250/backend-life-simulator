@@ -10,7 +10,7 @@ const { ensureUserSkills } = require('../services/userSkillService');
 async function seedUsers() {
   const userCount = Math.max(10, Number(process.env.SEED_USER_COUNT || 100));
   const demoEmail = process.env.SEED_USER_EMAIL || 'demo@rpg-life.local';
-  const password = process.env.SEED_USER_PASSWORD || 'Password123!';
+  const password = process.env.SEED_USER_PASSWORD || 'password';
   const passwordHash = await bcrypt.hash(password, 10);
   const [roles] = await pool.query("SELECT id FROM roles WHERE name = 'staff' LIMIT 1");
   const roleId = roles[0]?.id || null;
