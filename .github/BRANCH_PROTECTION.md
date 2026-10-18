@@ -9,8 +9,8 @@ Workflow di repo ini membantu memeriksa proses dari `local`, `develop`, `staging
 3. Perubahan ke `develop` harus lewat Pull Request dari `local`.
 4. Perubahan ke `staging` harus lewat Pull Request dari `develop`.
 5. Perubahan ke `main` harus lewat Pull Request dari `staging`.
-6. Pull Request ke semua branch tersebut menjalankan `Validasi aturan Pull Request`, `Validasi file sensitif`, `Pemeriksaan Laravel`, `Audit dependency`, `Scan keamanan Semgrep`, `Scan secret dengan Gitleaks`, dan `Analisis keamanan CodeQL`.
-7. Push langsung ke `local`, `develop`, `staging`, dan `main` akan dibuat gagal oleh workflow, lalu harus dikunci permanen dengan Rulesets/Branch Protection.
+6. Pull Request ke semua branch tersebut menjalankan `Validasi aturan Pull Request`, `Validasi file sensitif`, `Pemeriksaan Node.js backend`, `Audit dependency`, `Scan keamanan Semgrep`, `Scan secret dengan Gitleaks`, dan `Analisis keamanan CodeQL`.
+7. Workflow tidak menolak push langsung. Blokir push langsung harus diaktifkan melalui GitHub Ruleset/Branch Protection.
 
 ## Ruleset untuk `main` dan `staging`
 
@@ -20,7 +20,7 @@ Workflow di repo ini membantu memeriksa proses dari `local`, `develop`, `staging
 4. Aktifkan `Require status checks to pass`.
 5. Pilih status check `Validasi aturan Pull Request`.
 6. Pilih status check `Validasi file sensitif`.
-7. Pilih status check `Pemeriksaan Laravel`.
+7. Pilih status check `Pemeriksaan Node.js backend`.
 8. Pilih status check `Audit dependency`.
 9. Pilih status check `Scan keamanan Semgrep`.
 10. Pilih status check `Scan secret dengan Gitleaks`.
@@ -40,7 +40,7 @@ Workflow di repo ini membantu memeriksa proses dari `local`, `develop`, `staging
 3. Aktifkan `Require status checks to pass`.
 4. Pilih status check `Validasi aturan Pull Request`.
 5. Pilih status check `Validasi file sensitif`.
-6. Pilih status check `Pemeriksaan Laravel`.
+6. Pilih status check `Pemeriksaan Node.js backend`.
 7. Pilih status check `Audit dependency`.
 8. Pilih status check `Scan keamanan Semgrep`.
 9. Pilih status check `Scan secret dengan Gitleaks`.
@@ -55,28 +55,16 @@ Workflow di repo ini membantu memeriksa proses dari `local`, `develop`, `staging
 3. Aktifkan `Require status checks to pass`.
 4. Pilih status check `Validasi aturan Pull Request`.
 5. Pilih status check `Validasi file sensitif`.
-6. Pilih status check `Pemeriksaan Laravel`.
+6. Pilih status check `Pemeriksaan Node.js backend`.
 7. Pilih status check `Audit dependency`.
 8. Pilih status check `Scan keamanan Semgrep`.
 9. Pilih status check `Scan secret dengan Gitleaks`.
 10. Pilih status check `Analisis keamanan CodeQL`.
 11. Tetap aktifkan `Block force pushes` dan `Restrict deletions` jika branch ini dipakai bersama.
 
-## Hook lokal untuk developer
-
-Repo ini menyediakan hook lokal di `tools/hooks/pre-push`.
-
-Pasang hook dengan PowerShell:
-
-```powershell
-./tools/install-git-hooks.ps1
-```
-
-Hook ini akan menolak push langsung ke `local`, `develop`, `staging`, dan `main`, lalu menjalankan test dan build sebelum push dari branch kerja.
-
 ## Dependabot
 
-File `.github/dependabot.yml` akan membuat Pull Request otomatis ke branch `local` untuk update Composer, NPM, dan GitHub Actions.
+File `.github/dependabot.yml` akan membuat Pull Request otomatis ke branch `local` untuk update NPM dan GitHub Actions.
 
 ## Deployment server
 

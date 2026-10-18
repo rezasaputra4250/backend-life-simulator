@@ -14,12 +14,6 @@ on:
       - ready_for_review
       - edited
   workflow_dispatch:
-  push:
-    branches:
-      - local
-      - develop
-      - staging
-      - main
 
 permissions:
   contents: read
@@ -29,18 +23,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  tolak-push-langsung:
-    name: Tolak push langsung ke local/develop/staging/main
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (github.ref_name == 'local' || github.ref_name == 'develop' || github.ref_name == 'staging' || github.ref_name == 'main')
-    steps:
-      - name: Tolak push langsung
-        run: |
-          echo "Push langsung ke branch '${GITHUB_REF_NAME}' tidak diperbolehkan."
-          echo "Buat Pull Request dan pastikan sudah disetujui reviewer."
-          echo "Aktifkan juga GitHub Rulesets/Branch Protection agar aturan ini benar-benar terkunci."
-          exit 1
-
   validasi-pull-request:
     name: Validasi aturan Pull Request
     runs-on: ubuntu-latest
