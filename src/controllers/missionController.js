@@ -8,16 +8,19 @@ const { ensureSystemMission, syncMissionStatus } = require('../services/missionD
 
 async function ensureCurrentMissions(userId, connection = pool) {
   const [userRows] = await connection.query(
-    `SELECT users.difficulty, player_classes.name AS class_name
+    `SELECT users.difficulty, player_classes.name AS class_name, user_profiles.religion
      FROM users
      LEFT JOIN player_classes ON player_classes.id = users.class_id AND player_classes.deleted_at IS NULL
+     LEFT JOIN user_profiles ON user_profiles.user_id = users.id AND user_profiles.deleted_at IS NULL
      WHERE users.id = ? LIMIT 1`,
     [userId]
   );
   const difficulty = userRows[0]?.difficulty || 'easy';
   const className = userRows[0]?.class_name || null;
+  const religion = userRows[0]?.religion || null;
   for (const mission of allMissionSeeds) {
     if (mission.required_class && mission.required_class !== className) continue;
+    if (mission.required_religion && mission.required_religion !== religion) continue;
     await ensureSystemMission(connection, userId, difficulty, mission);
   }
 }
@@ -95,6 +98,38 @@ function getPreviousDate(dateValue) {
   return date.toISOString().slice(0, 10);
 }
 
+function calculateDailyStreak(days) {
+  if (!days.length) return { streak_days: 0, last_completed_date: null, status: 'none' };
+
+  const today = days[0].today;
+  const firstDay = days.find((day) => day.mission_date === today);
+  const todayCompleted = Boolean(firstDay)
+    && Number(firstDay.completed_missions) === Number(firstDay.total_missions)
+    && Number(firstDay.failed_missions) === 0;
+
+  let streak = 0;
+  let expectedDate = today;
+  if (todayCompleted) {
+    for (const day of days) {
+      if (day.mission_date !== expectedDate) break;
+      if (Number(day.completed_missions) !== Number(day.total_missions) || Number(day.failed_missions) > 0) break;
+      streak += 1;
+      expectedDate = getPreviousDate(expectedDate);
+    }
+  }
+
+  const lastCompletedDate = days.find((day) =>
+    Number(day.completed_missions) === Number(day.total_missions)
+    && Number(day.failed_missions) === 0
+  )?.mission_date || null;
+
+  return {
+    streak_days: streak,
+    last_completed_date: lastCompletedDate,
+    status: streak > 0 ? 'active' : firstDay?.failed_missions > 0 ? 'broken' : 'pending',
+  };
+}
+
 async function getDailyStreak(userId) {
   const [days] = await pool.query(
     `SELECT DATE_FORMAT(mission_date, '%Y-%m-%d') AS mission_date,
@@ -109,21 +144,7 @@ async function getDailyStreak(userId) {
     [userId]
   );
 
-  if (!days.length) return 0;
-
-  const today = days[0].today;
-  const firstDay = days.find((day) => day.mission_date === today);
-  if (!firstDay || Number(firstDay.completed_missions) !== Number(firstDay.total_missions)) return 0;
-
-  let streak = 0;
-  let expectedDate = today;
-  for (const day of days) {
-    if (day.mission_date !== expectedDate) break;
-    if (Number(day.completed_missions) !== Number(day.total_missions) || Number(day.failed_missions) > 0) break;
-    streak += 1;
-    expectedDate = getPreviousDate(expectedDate);
-  }
-  return streak;
+  return calculateDailyStreak(days);
 }
 
 async function markExpiredMissions(userId, connection = pool) {
@@ -148,13 +169,15 @@ async function list(req, res, next) {
     await ensureCurrentMissions(req.user.id);
     await markExpiredMissions(req.user.id);
     const [userRows] = await pool.query(
-      `SELECT player_classes.name AS class_name
+      `SELECT player_classes.name AS class_name, user_profiles.religion
        FROM users
        LEFT JOIN player_classes ON player_classes.id = users.class_id AND player_classes.deleted_at IS NULL
+       LEFT JOIN user_profiles ON user_profiles.user_id = users.id AND user_profiles.deleted_at IS NULL
        WHERE users.id = ? LIMIT 1`,
       [req.user.id]
     );
     const className = userRows[0]?.class_name || null;
+    const religion = userRows[0]?.religion || null;
     const [canonicalMissions] = await pool.query(
       `SELECT missions.*
        FROM missions
@@ -162,13 +185,14 @@ async function list(req, res, next) {
          AND guild_members.user_id = ? AND guild_members.deleted_at IS NULL
        WHERE missions.deleted_at IS NULL
          AND (missions.required_class IS NULL OR missions.required_class = ?)
+         AND (missions.required_religion IS NULL OR missions.required_religion = ?)
          AND ((missions.category IN ('system', 'personal') AND missions.user_id = ?)
            OR (missions.category = 'guild' AND guild_members.user_id IS NOT NULL))
          AND ((missions.frequency = 'daily' AND missions.mission_date = CURDATE())
            OR (missions.frequency = 'weekly' AND missions.mission_date = DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY))
            OR (missions.frequency = 'monthly' AND missions.mission_date = DATE_FORMAT(CURDATE(), '%Y-%m-01')))
        ORDER BY missions.scheduled_time IS NULL ASC, missions.scheduled_time ASC, missions.id ASC`,
-      [req.user.id, className, req.user.id]
+      [req.user.id, className, religion, req.user.id]
     );
     const canonicalCombined = canonicalMissions.map(formatMission).sort((left, right) => {
       if (!left.scheduled_time && !right.scheduled_time) return Number(left.id) - Number(right.id);
@@ -179,7 +203,7 @@ async function list(req, res, next) {
     return res.json({
       message: 'Data misi berhasil diambil.',
       missions: canonicalCombined,
-      stats: { streak_days: await getDailyStreak(req.user.id) },
+      stats: await getDailyStreak(req.user.id),
     });
 
     // Kept below temporarily for migration compatibility and removed after legacy tables are retired.
@@ -561,4 +585,4 @@ async function cancel(req, res, next) {
   }
 }
 
-module.exports = { list, toggle, cancel };
+module.exports = { list, toggle, cancel, calculateDailyStreak };
