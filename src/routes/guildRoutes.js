@@ -27,6 +27,19 @@ router.patch(
   guildController.update
 );
 router.post(
+  '/:id/join-requests',
+  [param('id').isInt({ min: 1 }).withMessage('ID guild tidak valid.')],
+  guildController.requestJoin
+);
+router.patch(
+  '/join-requests/:id',
+  [
+    param('id').isInt({ min: 1 }).withMessage('ID permintaan guild tidak valid.'),
+    body('action').isIn(['accept', 'reject']).withMessage('Aksi permintaan guild tidak valid.'),
+  ],
+  guildController.respondJoinRequest
+);
+router.post(
   '/:id/missions',
   [
     param('id').isInt({ min: 1 }).withMessage('ID guild tidak valid.'),

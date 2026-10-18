@@ -665,6 +665,20 @@ async function migrate() {
       CONSTRAINT financial_transactions_wallet_foreign FOREIGN KEY (wallet_id) REFERENCES financial_wallets(id) ON DELETE CASCADE,
       CONSTRAINT financial_transactions_user_foreign FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS guild_join_requests (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      guild_id BIGINT UNSIGNED NOT NULL,
+      requester_id BIGINT UNSIGNED NOT NULL,
+      status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY guild_join_requests_pair_unique (guild_id, requester_id),
+      INDEX guild_join_requests_guild_status_index (guild_id, status),
+      INDEX guild_join_requests_requester_status_index (requester_id, status),
+      CONSTRAINT guild_join_requests_guild_foreign FOREIGN KEY (guild_id) REFERENCES guilds(id) ON DELETE CASCADE,
+      CONSTRAINT guild_join_requests_requester_foreign FOREIGN KEY (requester_id) REFERENCES users(id) ON DELETE CASCADE
+    );
   `);
 
   // The legacy to-do module has been replaced by the unified missions domain.
@@ -684,7 +698,7 @@ async function migrate() {
     'reward_transactions', 'difficulty_configs', 'difficulty_level_experiences', 'experience_transactions',
     'guild_missions', 'guild_mission_contributions', 'mission_contributions',
     'system_mission_instances', 'personal_missions',
-    'financial_wallets', 'financial_accounts', 'financial_transactions',
+    'financial_wallets', 'financial_accounts', 'financial_transactions', 'guild_join_requests',
   ];
 
   for (const tableName of managedTables) {

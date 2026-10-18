@@ -48,6 +48,16 @@ async function list(req, res, next) {
        ORDER BY guild_invitations.created_at DESC`,
       [req.user.id]
     );
+    const [joinRequests] = await pool.query(
+      `SELECT guild_join_requests.id, guild_join_requests.guild_id, guild_join_requests.requester_id,
+              guild_join_requests.created_at, users.name AS requester_name, users.email AS requester_email
+       FROM guild_join_requests
+       INNER JOIN guilds ON guilds.id = guild_join_requests.guild_id AND guilds.owner_id = ?
+       INNER JOIN users ON users.id = guild_join_requests.requester_id AND users.deleted_at IS NULL
+       WHERE guild_join_requests.status = 'pending' AND guild_join_requests.deleted_at IS NULL
+       ORDER BY guild_join_requests.created_at ASC`,
+      [req.user.id]
+    );
     const [canonicalMissions] = await pool.query(
       `SELECT missions.id, missions.guild_id, missions.user_id AS creator_id,
               missions.title, missions.detail, missions.difficulty,
@@ -70,6 +80,7 @@ async function list(req, res, next) {
         missions: canonicalMissions.filter((mission) => Number(mission.guild_id) === Number(guild.id)),
       })),
       invitations,
+      join_requests: joinRequests,
     });
 
     // Legacy union kept below until the legacy tables are removed from old installations.
@@ -123,14 +134,17 @@ async function search(req, res, next) {
     if (query.length < 2) return res.status(422).json({ message: 'Masukkan minimal 2 karakter untuk mencari guild.' });
     const [guilds] = await pool.query(
       `SELECT guilds.id, guilds.name, guilds.description, guilds.owner_id, guilds.max_members,
-              users.name AS owner_name, COUNT(guild_members.id) AS member_count
+              users.name AS owner_name, COUNT(guild_members.id) AS member_count,
+              MAX(CASE WHEN guild_members.user_id = ? THEN 1 ELSE 0 END) AS is_member,
+              MAX(CASE WHEN guild_join_requests.requester_id = ? AND guild_join_requests.status = 'pending' THEN 1 ELSE 0 END) AS has_pending_request
        FROM guilds
        INNER JOIN users ON users.id = guilds.owner_id AND users.deleted_at IS NULL
        LEFT JOIN guild_members ON guild_members.guild_id = guilds.id AND guild_members.deleted_at IS NULL
+       LEFT JOIN guild_join_requests ON guild_join_requests.guild_id = guilds.id AND guild_join_requests.deleted_at IS NULL
        WHERE guilds.deleted_at IS NULL AND (guilds.name LIKE ? OR guilds.description LIKE ?)
        GROUP BY guilds.id, guilds.name, guilds.description, guilds.owner_id, guilds.max_members, users.name
        ORDER BY guilds.updated_at DESC, guilds.name ASC LIMIT 30`,
-      [`%${query}%`, `%${query}%`]
+      [req.user.id, req.user.id, `%${query}%`, `%${query}%`]
     );
     return res.json({ message: 'Hasil pencarian guild berhasil diambil.', guilds });
   } catch (error) {
@@ -167,6 +181,108 @@ async function update(req, res, next) {
     return res.json({ message: 'Guild berhasil diperbarui.', guild: { ...updatedGuilds[0], member_count: guild.member_count } });
   } catch (error) {
     return next(error);
+  }
+}
+
+async function requestJoin(req, res, next) {
+  try {
+    const [guilds] = await pool.query(
+      'SELECT id, owner_id, max_members FROM guilds WHERE id = ? AND deleted_at IS NULL LIMIT 1',
+      [req.params.id]
+    );
+    if (!guilds.length) return res.status(404).json({ message: 'Guild tidak ditemukan.' });
+    const guild = guilds[0];
+    if (Number(guild.owner_id) === Number(req.user.id)) return res.status(409).json({ message: 'Kamu sudah menjadi pemilik guild ini.' });
+    const [memberships] = await pool.query(
+      'SELECT id FROM guild_members WHERE guild_id = ? AND user_id = ? AND deleted_at IS NULL LIMIT 1',
+      [guild.id, req.user.id]
+    );
+    if (memberships.length) return res.status(409).json({ message: 'Kamu sudah menjadi anggota guild ini.' });
+    const [existing] = await pool.query(
+      'SELECT id, status FROM guild_join_requests WHERE guild_id = ? AND requester_id = ? LIMIT 1',
+      [guild.id, req.user.id]
+    );
+    if (existing[0]?.status === 'pending') return res.status(409).json({ message: 'Permintaan bergabung sudah dikirim.' });
+    if (existing.length) {
+      await pool.query(
+        `UPDATE guild_join_requests SET status = 'pending', updated_at = CURRENT_TIMESTAMP, deleted_at = NULL
+         WHERE id = ?`,
+        [existing[0].id]
+      );
+    } else {
+      await pool.query(
+        `INSERT INTO guild_join_requests (guild_id, requester_id, status) VALUES (?, ?, 'pending')`,
+        [guild.id, req.user.id]
+      );
+    }
+    await pool.query(
+      `INSERT INTO notifications (user_id, type, title, body, data)
+       VALUES (?, 'guild_join_request', 'Permintaan bergabung guild', ?, JSON_OBJECT('guild_id', ?, 'requester_id', ?))`,
+      [guild.owner_id, `${req.user.name} ingin bergabung ke guild kamu.`, guild.id, req.user.id]
+    );
+    return res.status(201).json({ message: 'Permintaan bergabung berhasil dikirim.' });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function respondJoinRequest(req, res, next) {
+  const errorResponse = validationErrorResponse(req, res);
+  if (errorResponse) return errorResponse;
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [requests] = await connection.query(
+      `SELECT requests.id, requests.guild_id, requests.requester_id, guilds.max_members,
+              guilds.name AS guild_name
+       FROM guild_join_requests AS requests
+       INNER JOIN guilds ON guilds.id = requests.guild_id AND guilds.owner_id = ? AND guilds.deleted_at IS NULL
+       WHERE requests.id = ? AND requests.status = 'pending' AND requests.deleted_at IS NULL LIMIT 1 FOR UPDATE`,
+      [req.user.id, req.params.id]
+    );
+    if (!requests.length) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'Permintaan bergabung tidak ditemukan atau kamu bukan pemilik guild.' });
+    }
+    const request = requests[0];
+    if (req.body.action === 'reject') {
+      await connection.query("UPDATE guild_join_requests SET status = 'rejected', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [request.id]);
+      await connection.commit();
+      return res.json({ message: 'Permintaan bergabung ditolak.' });
+    }
+    const [memberCount] = await connection.query(
+      'SELECT COUNT(*) AS total FROM guild_members WHERE guild_id = ? AND deleted_at IS NULL',
+      [request.guild_id]
+    );
+    if (Number(memberCount[0].total) >= Number(request.max_members)) {
+      await connection.rollback();
+      return res.status(409).json({ message: 'Guild sudah penuh.' });
+    }
+    const [otherGuilds] = await connection.query(
+      'SELECT guild_id FROM guild_members WHERE user_id = ? AND deleted_at IS NULL LIMIT 1 FOR UPDATE',
+      [request.requester_id]
+    );
+    if (otherGuilds.length) {
+      await connection.rollback();
+      return res.status(409).json({ message: 'Pengguna tersebut sudah memiliki guild.' });
+    }
+    await connection.query(
+      "INSERT INTO guild_members (guild_id, user_id, role) VALUES (?, ?, 'member')",
+      [request.guild_id, request.requester_id]
+    );
+    await connection.query("UPDATE guild_join_requests SET status = 'approved', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [request.id]);
+    await connection.query(
+      `INSERT INTO notifications (user_id, type, title, body, data)
+       VALUES (?, 'guild_join_request_approved', 'Permintaan guild disetujui', ?, JSON_OBJECT('guild_id', ?))`,
+      [request.requester_id, `Permintaanmu untuk bergabung ke ${request.guild_name} disetujui.`, request.guild_id]
+    );
+    await connection.commit();
+    return res.json({ message: 'Pengguna berhasil bergabung ke guild.' });
+  } catch (error) {
+    await connection.rollback();
+    return next(error);
+  } finally {
+    connection.release();
   }
 }
 
@@ -420,4 +536,4 @@ async function respond(req, res, next) {
   }
 }
 
-module.exports = { list, search, create, update, createMission, contributeMission, invite, respond };
+module.exports = { list, search, create, update, requestJoin, respondJoinRequest, createMission, contributeMission, invite, respond };
