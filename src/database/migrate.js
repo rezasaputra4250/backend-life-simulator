@@ -628,9 +628,24 @@ async function migrate() {
       CONSTRAINT financial_wallets_user_foreign FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS financial_accounts (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      user_id BIGINT UNSIGNED NOT NULL,
+      name VARCHAR(120) NOT NULL,
+      type ENUM('cash', 'bank', 'e_wallet', 'other') NOT NULL DEFAULT 'cash',
+      balance BIGINT NOT NULL DEFAULT 0,
+      currency CHAR(3) NOT NULL DEFAULT 'IDR',
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY financial_accounts_user_name_unique (user_id, name),
+      INDEX financial_accounts_user_index (user_id),
+      CONSTRAINT financial_accounts_user_foreign FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS financial_transactions (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
       wallet_id BIGINT UNSIGNED NOT NULL,
+      account_id BIGINT UNSIGNED NULL,
       user_id BIGINT UNSIGNED NOT NULL,
       type ENUM('income', 'expense') NOT NULL,
       amount BIGINT UNSIGNED NOT NULL,
@@ -642,6 +657,7 @@ async function migrate() {
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX financial_transactions_user_date_index (user_id, occurred_at),
       INDEX financial_transactions_wallet_index (wallet_id),
+      INDEX financial_transactions_account_index (account_id),
       CONSTRAINT financial_transactions_wallet_foreign FOREIGN KEY (wallet_id) REFERENCES financial_wallets(id) ON DELETE CASCADE,
       CONSTRAINT financial_transactions_user_foreign FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
@@ -664,7 +680,7 @@ async function migrate() {
     'reward_transactions', 'difficulty_configs', 'difficulty_level_experiences', 'experience_transactions',
     'guild_missions', 'guild_mission_contributions', 'mission_contributions',
     'system_mission_instances', 'personal_missions',
-    'financial_wallets', 'financial_transactions',
+    'financial_wallets', 'financial_accounts', 'financial_transactions',
   ];
 
   for (const tableName of managedTables) {
@@ -706,6 +722,20 @@ async function migrate() {
     }
   }
 
+  const [financialTransactionAccountColumns] = await connection.query(
+    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'financial_transactions' AND COLUMN_NAME = 'account_id'`,
+    [env.database.name]
+  );
+  if (!financialTransactionAccountColumns.length) {
+    await connection.query(
+      'ALTER TABLE financial_transactions ADD COLUMN account_id BIGINT UNSIGNED NULL AFTER wallet_id'
+    );
+    await connection.query(
+      'ALTER TABLE financial_transactions ADD INDEX financial_transactions_account_index (account_id)'
+    );
+  }
+
   await connection.query(
     `INSERT INTO financial_wallets (user_id)
      SELECT users.id
@@ -713,6 +743,37 @@ async function migrate() {
      LEFT JOIN financial_wallets ON financial_wallets.user_id = users.id
      WHERE financial_wallets.id IS NULL`
   );
+
+  await connection.query(
+    `INSERT IGNORE INTO financial_accounts (user_id, name, type)
+     SELECT users.id, account_defaults.name, account_defaults.type
+     FROM users
+     CROSS JOIN (
+       SELECT 'Kas Utama' AS name, 'cash' AS type
+       UNION ALL SELECT 'Bank', 'bank'
+       UNION ALL SELECT 'E-Wallet', 'e_wallet'
+     ) AS account_defaults`
+  );
+  await connection.query(
+    `UPDATE financial_transactions
+     INNER JOIN financial_accounts ON financial_accounts.user_id = financial_transactions.user_id
+       AND financial_accounts.name = 'Kas Utama'
+     SET financial_transactions.account_id = financial_accounts.id
+     WHERE financial_transactions.account_id IS NULL`
+  );
+  const [accountForeignKeys] = await connection.query(
+    `SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'financial_transactions'
+       AND COLUMN_NAME = 'account_id' AND REFERENCED_TABLE_NAME = 'financial_accounts'`,
+    [env.database.name]
+  );
+  if (!accountForeignKeys.length) {
+    await connection.query(
+      `ALTER TABLE financial_transactions
+       ADD CONSTRAINT financial_transactions_account_foreign
+       FOREIGN KEY (account_id) REFERENCES financial_accounts(id) ON DELETE RESTRICT`
+    );
+  }
 
   const [difficultyExperienceColumns] = await connection.query(
     `SELECT COLUMN_TYPE

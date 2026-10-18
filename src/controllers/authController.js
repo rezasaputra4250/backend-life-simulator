@@ -216,6 +216,12 @@ async function register(req, res, next) {
     await pool.query('INSERT INTO user_stats (user_id) VALUES (?)', [
       result.insertId,
     ]);
+    await pool.query('INSERT INTO financial_wallets (user_id) VALUES (?)', [result.insertId]);
+    await pool.query(
+      `INSERT INTO financial_accounts (user_id, name, type)
+       VALUES (?, 'Kas Utama', 'cash'), (?, 'Bank', 'bank'), (?, 'E-Wallet', 'e_wallet')`,
+      [result.insertId, result.insertId, result.insertId]
+    );
     await pool.query(
       `INSERT INTO user_profiles (user_id, birth_date, gender, phone, address)
        VALUES (?, ?, ?, ?, ?)`,
