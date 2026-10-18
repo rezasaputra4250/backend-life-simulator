@@ -16,7 +16,7 @@ function formatUser(user) {
     affiliate_code: user.affiliate_code,
     referred_by: user.referred_by,
     class_id: user.class_id || null,
-    difficulty: user.difficulty || 'easy',
+    difficulty: user.difficulty || null,
     role: {
       id: user.role_id,
       name: user.role_name,
@@ -246,6 +246,7 @@ async function register(req, res, next) {
       email,
       affiliate_code: affiliateCode,
       referred_by: referrer ? referrer.id : null,
+      difficulty: null,
       class_id: null,
       employee_number: null,
       position: null,

@@ -73,7 +73,7 @@ async function migrate() {
       password VARCHAR(255) NOT NULL,
       affiliate_code VARCHAR(32) NULL UNIQUE,
       referred_by BIGINT UNSIGNED NULL,
-      difficulty ENUM('easy', 'normal', 'hard', 'expert') NOT NULL DEFAULT 'easy',
+      difficulty ENUM('easy', 'normal', 'hard', 'expert') NULL DEFAULT NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX users_role_id_index (role_id),
@@ -959,16 +959,14 @@ async function migrate() {
   );
   if (!userDifficultyColumns.length) {
     await connection.query(
-      "ALTER TABLE users ADD COLUMN difficulty ENUM('easy', 'normal', 'hard', 'expert') NOT NULL DEFAULT 'easy'"
+      "ALTER TABLE users ADD COLUMN difficulty ENUM('easy', 'normal', 'hard', 'expert') NULL DEFAULT NULL"
     );
   } else {
     await connection.query("UPDATE users SET difficulty = 'normal' WHERE difficulty = 'medium'");
     await connection.query("UPDATE users SET difficulty = 'expert' WHERE difficulty = 'epic'");
-    if (userDifficultyColumns[0].COLUMN_TYPE !== "enum('easy','normal','hard','expert')") {
-      await connection.query(
-        "ALTER TABLE users MODIFY COLUMN difficulty ENUM('easy', 'normal', 'hard', 'expert') NOT NULL DEFAULT 'easy'"
-      );
-    }
+    await connection.query(
+      "ALTER TABLE users MODIFY COLUMN difficulty ENUM('easy', 'normal', 'hard', 'expert') NULL DEFAULT NULL"
+    );
   }
 
   // Store the user's current class directly on users. Keep user_classes as a
