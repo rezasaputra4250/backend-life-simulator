@@ -13,4 +13,9 @@ const muslimHabitSeeds = [
   { title: 'Bersedekah', scheduled_time: '12:30:00', detail: 'Kebaikan - Sesuai kemampuan', reward: 25, reward_type: 'xp', reward_name: '25 XP', reward_key: 'xp' },
 ];
 
-module.exports = { muslimHabitSeeds };
+module.exports = {
+  muslimHabitSeeds: muslimHabitSeeds.map((mission) => ({
+    ...mission,
+    required_religion: 'islam',
+  })),
+};
