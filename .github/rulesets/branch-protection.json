@@ -37,32 +37,25 @@
         "do_not_enforce_on_create": false,
         "required_status_checks": [
           {
-            "context": "Validasi aturan Pull Request",
-            "integration_id": -1
+            "context": "Validasi aturan Pull Request"
           },
           {
-            "context": "Validasi file sensitif",
-            "integration_id": -1
+            "context": "Validasi file sensitif"
           },
           {
-            "context": "Pemeriksaan Node.js backend",
-            "integration_id": -1
+            "context": "Pemeriksaan Node.js backend"
           },
           {
-            "context": "Audit dependency",
-            "integration_id": -1
+            "context": "Audit dependency"
           },
           {
-            "context": "Scan keamanan Semgrep",
-            "integration_id": -1
+            "context": "Scan keamanan Semgrep"
           },
           {
-            "context": "Scan secret dengan Gitleaks",
-            "integration_id": -1
+            "context": "Scan secret dengan Gitleaks"
           },
           {
-            "context": "Analisis keamanan CodeQL",
-            "integration_id": -1
+            "context": "Analisis keamanan CodeQL"
           }
         ],
         "strict_required_status_checks_policy": true
