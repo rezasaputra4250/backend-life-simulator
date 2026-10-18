@@ -7,6 +7,7 @@ on:
       - develop
       - staging
       - main
+      - master
     types:
       - opened
       - synchronize
@@ -65,8 +66,8 @@ jobs:
             exit 1
           fi
 
-          if [ "${BASE_BRANCH}" = "main" ] && [ "${HEAD_BRANCH}" != "staging" ]; then
-            echo "PR ke main hanya boleh dari branch staging."
+          if { [ "${BASE_BRANCH}" = "main" ] || [ "${BASE_BRANCH}" = "master" ]; } && [ "${HEAD_BRANCH}" != "staging" ]; then
+            echo "PR ke main/master hanya boleh dari branch staging."
             exit 1
           fi
 

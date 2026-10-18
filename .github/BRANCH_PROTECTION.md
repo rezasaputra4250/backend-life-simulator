@@ -1,6 +1,6 @@
 # Branch Protection
 
-Workflow di repo ini membantu memeriksa proses dari `local`, `develop`, `staging`, sampai `main`, tetapi GitHub tetap perlu dikonfigurasi agar pembatasan orang dan approval benar-benar aktif.
+Workflow di repo ini membantu memeriksa proses `feature/*` → `local` → `develop` → `staging` → `main/master`, tetapi GitHub tetap perlu dikonfigurasi agar pembatasan orang dan approval benar-benar aktif.
 
 ## Alur branch
 
@@ -8,14 +8,14 @@ Workflow di repo ini membantu memeriksa proses dari `local`, `develop`, `staging
 2. Perubahan ke `local` harus lewat Pull Request dari branch kerja tersebut.
 3. Perubahan ke `develop` harus lewat Pull Request dari `local`.
 4. Perubahan ke `staging` harus lewat Pull Request dari `develop`.
-5. Perubahan ke `main` harus lewat Pull Request dari `staging`.
+5. Perubahan ke `main` atau `master` harus lewat Pull Request dari `staging`.
 6. Pull Request ke semua branch tersebut menjalankan `Validasi aturan Pull Request`, `Validasi file sensitif`, `Pemeriksaan Node.js backend`, `Audit dependency`, `Scan keamanan Semgrep`, `Scan secret dengan Gitleaks`, dan `Analisis keamanan CodeQL`.
-7. Workflow tidak menolak push langsung. Blokir push langsung harus diaktifkan melalui GitHub Ruleset/Branch Protection.
+7. Workflow memvalidasi alur Pull Request. Blokir push langsung harus diaktifkan melalui GitHub Ruleset/Branch Protection.
 
-## Ruleset untuk `main` dan `staging`
+## Ruleset untuk `main`, `master`, dan `staging`
 
 1. Buka `Settings` -> `Rules` -> `Rulesets` atau `Settings` -> `Branches`.
-2. Buat aturan untuk branch `main` dan `staging`.
+2. Buat aturan untuk branch `main`, `master`, dan `staging`.
 3. Aktifkan `Require a pull request before merging`.
 4. Aktifkan `Require status checks to pass`.
 5. Pilih status check `Validasi aturan Pull Request`.
@@ -28,7 +28,7 @@ Workflow di repo ini membantu memeriksa proses dari `local`, `develop`, `staging
 12. Aktifkan `Require approvals` dan tentukan minimal `1` approval.
 13. Aktifkan `Require review from Code Owners`. File `.github/CODEOWNERS` sudah diset agar hanya `@rezasaputra4250` yang menjadi owner semua perubahan.
 14. Aktifkan `Restrict updates` atau `Restrict who can push to matching branches`.
-15. Masukkan user/team yang boleh update `main` dan `staging`.
+15. Masukkan user/team yang boleh update `main`, `master`, dan `staging`.
 16. Aktifkan `Block force pushes`.
 17. Aktifkan `Restrict deletions`.
 18. Jika tersedia, aktifkan `Do not allow bypassing the above settings`.
@@ -79,4 +79,4 @@ Intinya:
 3. Environment `staging` dan `production` wajib approval dari `@rezasaputra4250`.
 4. Matikan webhook, cron, atau panel hosting yang auto-pull dari `staging` atau `main`.
 
-Dengan pengaturan ini, branch kerja seperti `feature/*` dan `bugfix/*` tetap fleksibel untuk developer, sedangkan `local`, `develop`, `staging`, dan `main` hanya bisa diubah lewat Pull Request yang sudah disetujui oleh `@rezasaputra4250` dan lolos semua check.
+Dengan pengaturan ini, branch kerja seperti `feature/*` dan `bugfix/*` tetap fleksibel untuk developer, sedangkan `local`, `develop`, `staging`, `main`, dan `master` hanya bisa diubah lewat Pull Request yang sudah disetujui oleh `@rezasaputra4250` dan lolos semua check.
