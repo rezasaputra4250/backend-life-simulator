@@ -21,7 +21,7 @@ Branch `local` digunakan sebagai dasar branch kerja. Jangan membuat perubahan la
 
 Pastikan perangkat berikut sudah terpasang:
 
-- Node.js versi 20 atau yang kompatibel dengan workflow CI
+- Node.js versi 24 atau yang kompatibel dengan workflow CI
 - npm
 - MySQL Server versi yang kompatibel dengan `mysql2`
 
