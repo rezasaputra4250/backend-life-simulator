@@ -56,7 +56,7 @@ jobs:
           CPANEL_SSH_PORT: ${{ secrets.CPANEL_SSH_PORT }}
           CPANEL_SSH_USER: ${{ secrets.CPANEL_SSH_USER }}
           CPANEL_BACKEND_PATH: ${{ secrets.CPANEL_BACKEND_PATH }}
-          CPANEL_NODE_BIN: ${{ secrets.CPANEL_NODE_BIN }}
+          CPANEL_NPM_BIN: ${{ secrets.CPANEL_NPM_BIN }}
           DEPLOY_BRANCH: main
         run: |
           set -euo pipefail
@@ -64,19 +64,19 @@ jobs:
           ssh_args=(-i "$ssh_dir/deploy_key" -p "${CPANEL_SSH_PORT:-22}" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$ssh_dir/known_hosts")
 
           ssh "${ssh_args[@]}" "${CPANEL_SSH_USER}@${CPANEL_SSH_HOST}" bash -s -- \
-            "$CPANEL_BACKEND_PATH" "$DEPLOY_BRANCH" "${CPANEL_NODE_BIN:-node}" <<'REMOTE_SCRIPT'
+            "$CPANEL_BACKEND_PATH" "$DEPLOY_BRANCH" "${CPANEL_NPM_BIN:-npm}" <<'REMOTE_SCRIPT'
           set -euo pipefail
 
           deploy_path="$1"
           deploy_branch="$2"
-          node_bin="$3"
+          npm_bin="$3"
 
           cd "$deploy_path"
           git fetch origin "$deploy_branch"
           git checkout "$deploy_branch"
           git reset --hard "origin/$deploy_branch"
-          "$node_bin" ci --omit=dev
-          "$node_bin" src/database/migrate.js
+          "$npm_bin" ci --omit=dev
+          "$npm_bin" run migrate
 
           mkdir -p tmp
           touch tmp/restart.txt
