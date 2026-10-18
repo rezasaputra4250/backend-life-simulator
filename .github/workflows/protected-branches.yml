@@ -88,7 +88,7 @@ jobs:
           set -e
 
           if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
-            git fetch origin "${GITHUB_BASE_REF}" --depth=1
+            git fetch origin "${GITHUB_BASE_REF}" --no-tags
             CHANGED_FILES="$(git diff --name-only "origin/${GITHUB_BASE_REF}"...HEAD)"
           else
             CHANGED_FILES="$(git diff-tree --no-commit-id --name-only -r "${GITHUB_SHA}")"
@@ -108,7 +108,7 @@ jobs:
           POLA_SECRET='API-Key|APP-ID|Authorization: Bearer|CLIENT_SECRET|SECRET_KEY|PASSWORD=|TOKEN=|PRIVATE KEY'
 
           if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
-            git fetch origin "${GITHUB_BASE_REF}" --depth=1
+            git fetch origin "${GITHUB_BASE_REF}" --no-tags
             CHANGED_FILES="$(git diff --name-only "origin/${GITHUB_BASE_REF}"...HEAD)"
           else
             CHANGED_FILES="$(git diff-tree --no-commit-id --name-only -r "${GITHUB_SHA}")"
