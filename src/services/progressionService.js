@@ -104,7 +104,7 @@ async function getProgression(userId) {
     [userId]
   );
   const [skills] = await pool.query(
-    `SELECT skills.name, skills.label, skills.description, user_skills.level, user_skills.experience,
+    `SELECT skills.id, skills.name, skills.label, skills.description, user_skills.level, user_skills.experience,
             user_skills.experience_to_next_level
      FROM user_skills INNER JOIN skills ON skills.id = user_skills.skill_id
      WHERE user_skills.user_id = ? AND user_skills.deleted_at IS NULL AND skills.deleted_at IS NULL
