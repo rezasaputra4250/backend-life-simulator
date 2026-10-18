@@ -2,6 +2,109 @@
 
 Backend aplikasi RPG Life Simulator berbasis Express dan Node.js.
 
+## Setelah melakukan clone
+
+Ikuti langkah berikut setelah repository berhasil di-clone.
+
+### 1. Masuk ke folder backend dan gunakan branch `local`
+
+```bash
+cd backend
+git fetch origin
+git switch local
+git pull --ff-only origin local
+```
+
+Branch `local` digunakan sebagai dasar branch kerja. Jangan membuat perubahan langsung di `develop`, `staging`, atau `main`.
+
+### 2. Siapkan perangkat lunak
+
+Pastikan perangkat berikut sudah terpasang:
+
+- Node.js versi 20 atau yang kompatibel dengan workflow CI
+- npm
+- MySQL Server versi yang kompatibel dengan `mysql2`
+
+Pastikan service MySQL sedang berjalan dan user database memiliki izin untuk membuat database serta tabel.
+
+### 3. Buat file environment
+
+Salin template environment, lalu isi nilai lokal:
+
+```bash
+copy .env.example .env
+```
+
+Pada Linux atau macOS, gunakan:
+
+```bash
+cp .env.example .env
+```
+
+Sesuaikan minimal `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, dan `JWT_SECRET`. Untuk development, `DB_NAME=backend` dapat digunakan jika database tersebut belum dipakai aplikasi lain. Jangan commit file `.env`.
+
+### 4. Install dependency
+
+```bash
+npm ci
+```
+
+Gunakan `npm ci` agar dependency mengikuti `package-lock.json` yang ada di repository.
+
+### 5. Siapkan database
+
+Jalankan migrasi untuk membuat database, tabel, struktur relasi, dan data referensi yang diperlukan:
+
+```bash
+npm run migrate
+```
+
+Untuk development baru, data contoh dapat dibuat dengan perintah berikut setelah migrasi:
+
+```bash
+npm run db:seed
+```
+
+Seeder tambahan tersedia untuk kebutuhan tertentu:
+
+```bash
+npm run seed:missions
+npm run seed:kingdom-guilds
+npm run seed:muslim-habits
+```
+
+Jangan menjalankan seeder atau `npm run migrate:fresh` pada database staging/production tanpa peninjauan karena dapat mengubah atau menghapus data.
+
+### 6. Jalankan pemeriksaan
+
+```bash
+npm test
+```
+
+Semua test harus lulus sebelum membuat Pull Request.
+
+### 7. Jalankan backend
+
+```bash
+npm run dev
+```
+
+Secara default backend berjalan pada `http://localhost:5000`. Port dan host dapat diubah melalui `.env`. Untuk menjalankan tanpa watcher:
+
+```bash
+npm start
+```
+
+### 8. Mulai pekerjaan di branch baru
+
+Setelah setup lokal selesai, buat branch kerja dari `local`:
+
+```bash
+git switch -c feature/nama-fitur
+```
+
+Setelah perubahan selesai, jalankan test kembali, commit dengan pesan yang jelas, lalu buat Pull Request menuju `local`.
+
 ## Kondisi repository saat ini
 
 Repository menggunakan alur promosi branch berikut:
