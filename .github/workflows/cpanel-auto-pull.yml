@@ -1,0 +1,84 @@
+name: Deploy Backend ke cPanel
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-backend-cpanel
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Pull dan restart backend cPanel
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Validasi secret deploy
+        env:
+          CPANEL_SSH_HOST: ${{ secrets.CPANEL_SSH_HOST }}
+          CPANEL_SSH_USER: ${{ secrets.CPANEL_SSH_USER }}
+          CPANEL_SSH_PRIVATE_KEY: ${{ secrets.CPANEL_SSH_PRIVATE_KEY }}
+          CPANEL_SSH_KNOWN_HOSTS: ${{ secrets.CPANEL_SSH_KNOWN_HOSTS }}
+          CPANEL_BACKEND_PATH: ${{ secrets.CPANEL_BACKEND_PATH }}
+        run: |
+          set -euo pipefail
+
+          for variable in CPANEL_SSH_HOST CPANEL_SSH_USER CPANEL_SSH_PRIVATE_KEY CPANEL_SSH_KNOWN_HOSTS CPANEL_BACKEND_PATH; do
+            if [ -z "${!variable}" ]; then
+              echo "Secret ${variable} wajib diisi."
+              exit 1
+            fi
+          done
+
+      - name: Siapkan SSH
+        env:
+          CPANEL_SSH_PRIVATE_KEY: ${{ secrets.CPANEL_SSH_PRIVATE_KEY }}
+          CPANEL_SSH_KNOWN_HOSTS: ${{ secrets.CPANEL_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          ssh_dir="$RUNNER_TEMP/cpanel-ssh"
+          mkdir -p "$ssh_dir"
+          chmod 700 "$ssh_dir"
+          printf '%s\n' "$CPANEL_SSH_PRIVATE_KEY" > "$ssh_dir/deploy_key"
+          chmod 600 "$ssh_dir/deploy_key"
+          printf '%s\n' "$CPANEL_SSH_KNOWN_HOSTS" > "$ssh_dir/known_hosts"
+          chmod 644 "$ssh_dir/known_hosts"
+
+      - name: Pull dan restart backend di cPanel
+        env:
+          CPANEL_SSH_HOST: ${{ secrets.CPANEL_SSH_HOST }}
+          CPANEL_SSH_PORT: ${{ secrets.CPANEL_SSH_PORT }}
+          CPANEL_SSH_USER: ${{ secrets.CPANEL_SSH_USER }}
+          CPANEL_BACKEND_PATH: ${{ secrets.CPANEL_BACKEND_PATH }}
+          CPANEL_NODE_BIN: ${{ secrets.CPANEL_NODE_BIN }}
+          DEPLOY_BRANCH: main
+        run: |
+          set -euo pipefail
+          ssh_dir="$RUNNER_TEMP/cpanel-ssh"
+          ssh_args=(-i "$ssh_dir/deploy_key" -p "${CPANEL_SSH_PORT:-22}" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$ssh_dir/known_hosts")
+
+          ssh "${ssh_args[@]}" "${CPANEL_SSH_USER}@${CPANEL_SSH_HOST}" bash -s -- \
+            "$CPANEL_BACKEND_PATH" "$DEPLOY_BRANCH" "${CPANEL_NODE_BIN:-node}" <<'REMOTE_SCRIPT'
+          set -euo pipefail
+
+          deploy_path="$1"
+          deploy_branch="$2"
+          node_bin="$3"
+
+          cd "$deploy_path"
+          git fetch origin "$deploy_branch"
+          git checkout "$deploy_branch"
+          git reset --hard "origin/$deploy_branch"
+          "$node_bin" ci --omit=dev
+          "$node_bin" src/database/migrate.js
+
+          mkdir -p tmp
+          touch tmp/restart.txt
+          echo "Deploy backend cPanel selesai pada commit $(git rev-parse --short HEAD)."
+          REMOTE_SCRIPT
