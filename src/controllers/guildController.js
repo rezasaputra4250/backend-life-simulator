@@ -17,11 +17,13 @@ async function list(req, res, next) {
     const [guilds] = await pool.query(
       `SELECT guilds.id, guilds.name, guilds.description, guilds.owner_id,
               guilds.max_members, guilds.created_at,
-              COUNT(guild_members.id) AS member_count
+              COUNT(all_members.id) AS member_count
        FROM guilds
-       INNER JOIN guild_members ON guild_members.guild_id = guilds.id
-       WHERE guilds.deleted_at IS NULL AND guild_members.deleted_at IS NULL
-         AND guild_members.user_id = ?
+       INNER JOIN guild_members AS current_members ON current_members.guild_id = guilds.id
+         AND current_members.deleted_at IS NULL AND current_members.user_id = ?
+       INNER JOIN guild_members AS all_members ON all_members.guild_id = guilds.id
+         AND all_members.deleted_at IS NULL
+       WHERE guilds.deleted_at IS NULL
        GROUP BY guilds.id
        ORDER BY guilds.updated_at DESC`,
       [req.user.id]
