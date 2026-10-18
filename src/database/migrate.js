@@ -647,9 +647,11 @@ async function migrate() {
       wallet_id BIGINT UNSIGNED NOT NULL,
       account_id BIGINT UNSIGNED NULL,
       user_id BIGINT UNSIGNED NOT NULL,
-      type ENUM('income', 'expense') NOT NULL,
+      type ENUM('income', 'expense', 'transfer') NOT NULL,
       amount BIGINT UNSIGNED NOT NULL,
       balance_after BIGINT NOT NULL,
+      from_account_id BIGINT UNSIGNED NULL,
+      to_account_id BIGINT UNSIGNED NULL,
       category VARCHAR(80) NOT NULL,
       description VARCHAR(255) NULL,
       occurred_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -658,6 +660,8 @@ async function migrate() {
       INDEX financial_transactions_user_date_index (user_id, occurred_at),
       INDEX financial_transactions_wallet_index (wallet_id),
       INDEX financial_transactions_account_index (account_id),
+      INDEX financial_transactions_from_account_index (from_account_id),
+      INDEX financial_transactions_to_account_index (to_account_id),
       CONSTRAINT financial_transactions_wallet_foreign FOREIGN KEY (wallet_id) REFERENCES financial_wallets(id) ON DELETE CASCADE,
       CONSTRAINT financial_transactions_user_foreign FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
@@ -736,6 +740,25 @@ async function migrate() {
     );
   }
 
+  const [financialTransactionTransferColumns] = await connection.query(
+    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'financial_transactions'
+       AND COLUMN_NAME IN ('from_account_id', 'to_account_id')`,
+    [env.database.name]
+  );
+  const transferColumnNames = financialTransactionTransferColumns.map((column) => column.COLUMN_NAME);
+  if (!transferColumnNames.includes('from_account_id')) {
+    await connection.query('ALTER TABLE financial_transactions ADD COLUMN from_account_id BIGINT UNSIGNED NULL AFTER balance_after');
+    await connection.query('ALTER TABLE financial_transactions ADD INDEX financial_transactions_from_account_index (from_account_id)');
+  }
+  if (!transferColumnNames.includes('to_account_id')) {
+    await connection.query('ALTER TABLE financial_transactions ADD COLUMN to_account_id BIGINT UNSIGNED NULL AFTER from_account_id');
+    await connection.query('ALTER TABLE financial_transactions ADD INDEX financial_transactions_to_account_index (to_account_id)');
+  }
+  await connection.query(
+    `ALTER TABLE financial_transactions MODIFY COLUMN type ENUM('income', 'expense', 'transfer') NOT NULL`
+  );
+
   await connection.query(
     `INSERT INTO financial_wallets (user_id)
      SELECT users.id
@@ -772,6 +795,25 @@ async function migrate() {
       `ALTER TABLE financial_transactions
        ADD CONSTRAINT financial_transactions_account_foreign
        FOREIGN KEY (account_id) REFERENCES financial_accounts(id) ON DELETE RESTRICT`
+    );
+  }
+  const [transferForeignKeys] = await connection.query(
+    `SELECT CONSTRAINT_NAME, COLUMN_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'financial_transactions'
+       AND REFERENCED_TABLE_NAME = 'financial_accounts'
+       AND COLUMN_NAME IN ('from_account_id', 'to_account_id')`,
+    [env.database.name]
+  );
+  if (!transferForeignKeys.some((key) => key.COLUMN_NAME === 'from_account_id')) {
+    await connection.query(
+      `ALTER TABLE financial_transactions ADD CONSTRAINT financial_transactions_from_account_foreign
+       FOREIGN KEY (from_account_id) REFERENCES financial_accounts(id) ON DELETE RESTRICT`
+    );
+  }
+  if (!transferForeignKeys.some((key) => key.COLUMN_NAME === 'to_account_id')) {
+    await connection.query(
+      `ALTER TABLE financial_transactions ADD CONSTRAINT financial_transactions_to_account_foreign
+       FOREIGN KEY (to_account_id) REFERENCES financial_accounts(id) ON DELETE RESTRICT`
     );
   }
 
