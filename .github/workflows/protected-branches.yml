@@ -131,7 +131,7 @@ jobs:
             CHANGED_FILES="$(git diff-tree --no-commit-id --name-only -r "${GITHUB_SHA}")"
           fi
 
-          FILES_TO_SCAN="$(echo "${CHANGED_FILES}" | grep -E '^(app|config|routes|resources|database)/.*\.(php|blade\.php|js|json|env|yml|yaml)$' || true)"
+          FILES_TO_SCAN="$(echo "${CHANGED_FILES}" | grep -E '^(src|app|components|hooks|utils|config|database|routes|scripts)/.*\.(ts|tsx|js|jsx|json|env|yml|yaml)$' || true)"
 
           if [ -z "${FILES_TO_SCAN}" ]; then
             echo "Tidak ada file aplikasi yang perlu dicek untuk pola secret."
@@ -153,25 +153,14 @@ jobs:
 
           echo "Tidak ditemukan pola secret umum pada area yang diperiksa."
 
-  pemeriksaan-laravel:
-    name: Pemeriksaan Laravel
+  pemeriksaan-node:
+    name: Pemeriksaan Node.js backend
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' || github.ref_name == 'local' || github.ref_name == 'develop'
-    env:
-      DB_CONNECTION: sqlite
-      DB_DATABASE: ':memory:'
-      PUPPETEER_SKIP_DOWNLOAD: true
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Siapkan PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'
-          extensions: bcmath, ctype, dom, fileinfo, filter, gd, json, mbstring, openssl, pdo, pdo_sqlite, tokenizer, xml, zip
-          coverage: none
 
       - name: Siapkan Node.js
         uses: actions/setup-node@v4
@@ -179,35 +168,11 @@ jobs:
           node-version: '20'
           cache: npm
 
-      - name: Cache package Composer
-        uses: actions/cache@v4
-        with:
-          path: vendor
-          key: ${{ runner.os }}-composer-${{ hashFiles('composer.lock') }}
-          restore-keys: ${{ runner.os }}-composer-
-
-      - name: Install dependency PHP
-        run: composer install --no-interaction --prefer-dist --no-progress
-
-      - name: Siapkan environment Laravel
-        run: |
-          cp .env.example .env
-          php artisan key:generate --ansi
-
-      - name: Cek syntax PHP
-        run: find app config database routes tests -name "*.php" -print0 | xargs -0 -n1 php -l
-
-      - name: Cek format kode dengan Pint
-        run: vendor/bin/pint --test
-
-      - name: Jalankan test Laravel
-        run: php artisan test
-
       - name: Install dependency Node.js
         run: npm ci
 
-      - name: Build asset frontend
-        run: npm run build
+      - name: Jalankan test Node.js
+        run: npm test
 
   audit-dependency:
     name: Audit dependency
@@ -217,22 +182,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Siapkan PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'
-          coverage: none
-
       - name: Siapkan Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: npm
 
-      - name: Audit package Composer
-        run: composer audit
+      - name: Install dependency Node.js
+        run: npm ci
 
-      - name: Audit package NPM
+      - name: Audit dependency npm
         run: npm audit --audit-level=high
 
   semgrep:
