@@ -232,6 +232,17 @@ async function respondJoinRequest(req, res, next) {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+    // Serialize approvals for the same requester before locking any request row.
+    const [requesterRows] = await connection.query(
+      `SELECT users.id FROM users
+       INNER JOIN guild_join_requests ON guild_join_requests.requester_id = users.id
+       WHERE guild_join_requests.id = ? LIMIT 1 FOR UPDATE`,
+      [req.params.id]
+    );
+    if (!requesterRows.length) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'Permintaan bergabung tidak ditemukan.' });
+    }
     const [requests] = await connection.query(
       `SELECT requests.id, requests.guild_id, requests.requester_id, guilds.max_members,
               guilds.name AS guild_name
@@ -271,6 +282,12 @@ async function respondJoinRequest(req, res, next) {
       [request.guild_id, request.requester_id]
     );
     await connection.query("UPDATE guild_join_requests SET status = 'approved', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [request.id]);
+    await connection.query(
+      `UPDATE guild_join_requests
+       SET status = 'rejected', deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+       WHERE requester_id = ? AND status = 'pending' AND id <> ? AND deleted_at IS NULL`,
+      [request.requester_id, request.id]
+    );
     await connection.query(
       `INSERT INTO notifications (user_id, type, title, body, data)
        VALUES (?, 'guild_join_request_approved', 'Permintaan guild disetujui', ?, JSON_OBJECT('guild_id', ?))`,
