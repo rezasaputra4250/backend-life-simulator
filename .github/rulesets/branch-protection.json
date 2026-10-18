@@ -55,7 +55,7 @@
             "context": "Scan secret dengan Gitleaks"
           },
           {
-            "context": "Analisis keamanan CodeQL"
+            "context": "Analisis keamanan CodeQL (javascript-typescript)"
           }
         ],
         "strict_required_status_checks_policy": true
