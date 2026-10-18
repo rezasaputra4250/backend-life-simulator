@@ -1,0 +1,51 @@
+name: Deploy Manual
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Pilih server tujuan deploy.
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      ref:
+        description: Branch/tag/commit yang akan dideploy.
+        required: true
+        default: staging
+
+permissions:
+  contents: read
+
+jobs:
+  validasi-deploy:
+    name: Validasi deploy manual
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target }}
+    steps:
+      - name: Validasi target dan ref
+        run: |
+          echo "Target deploy: ${{ inputs.target }}"
+          echo "Ref deploy: ${{ inputs.ref }}"
+
+          if [ "${{ inputs.target }}" = "staging" ] && [ "${{ inputs.ref }}" != "staging" ]; then
+            echo "Deploy ke staging hanya boleh memakai ref staging."
+            exit 1
+          fi
+
+          if [ "${{ inputs.target }}" = "production" ] && [ "${{ inputs.ref }}" != "main" ]; then
+            echo "Deploy ke production hanya boleh memakai ref main."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Belum menjalankan deploy otomatis
+        run: |
+          echo "Workflow ini sengaja hanya manual dan tidak berjalan saat push."
+          echo "Tambahkan langkah SSH/rsync/deploy hanya jika environment GitHub sudah diberi required reviewers."
+          echo "Pastikan server tidak punya webhook atau auto-pull dari branch main/staging."

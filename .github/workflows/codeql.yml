@@ -1,0 +1,42 @@
+name: Analisis CodeQL
+
+on:
+  pull_request:
+    branches:
+      - local
+      - develop
+      - staging
+      - main
+  workflow_dispatch:
+  schedule:
+    - cron: "25 18 * * 1"
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    name: Analisis keamanan CodeQL
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language:
+          - php
+          - javascript-typescript
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Inisialisasi CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Jalankan analisis CodeQL
+        uses: github/codeql-action/analyze@v3
