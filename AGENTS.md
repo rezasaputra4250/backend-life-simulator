@@ -42,3 +42,11 @@
 - Selesai di branch/PR terpisah: konfigurasi environment, penyaringan misi berdasarkan agama, dan detail status streak.
 - Implementasi mobile yang sudah dibuat: form in-app sebagai modal, header navigasi profile, onboarding agama, dan navigasi reward skill ke `/profile/skills`.
 - Branch dokumentasi ini menjaga keputusan teknis di atas tetap terlihat oleh agent dan kontributor berikutnya.
+
+## Standar Pull Request
+
+- Gunakan judul singkat dengan format Conventional Commits.
+- Gunakan struktur sederhana: `Tujuan`, `Perubahan`, `Validasi`, dan `Target`.
+- Jelaskan hanya perubahan yang benar-benar ada di branch tersebut.
+- Cantumkan keterbatasan validasi secara jujur dan jangan menyatakan test lulus jika belum dijalankan.
+- Semua PR fitur dan perbaikan diarahkan ke `local`.
