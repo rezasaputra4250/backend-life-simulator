@@ -117,6 +117,59 @@ async function list(req, res, next) {
   }
 }
 
+async function search(req, res, next) {
+  try {
+    const query = String(req.query.q || '').trim();
+    if (query.length < 2) return res.status(422).json({ message: 'Masukkan minimal 2 karakter untuk mencari guild.' });
+    const [guilds] = await pool.query(
+      `SELECT guilds.id, guilds.name, guilds.description, guilds.owner_id, guilds.max_members,
+              users.name AS owner_name, COUNT(guild_members.id) AS member_count
+       FROM guilds
+       INNER JOIN users ON users.id = guilds.owner_id AND users.deleted_at IS NULL
+       LEFT JOIN guild_members ON guild_members.guild_id = guilds.id AND guild_members.deleted_at IS NULL
+       WHERE guilds.deleted_at IS NULL AND (guilds.name LIKE ? OR guilds.description LIKE ?)
+       GROUP BY guilds.id, guilds.name, guilds.description, guilds.owner_id, guilds.max_members, users.name
+       ORDER BY guilds.updated_at DESC, guilds.name ASC LIMIT 30`,
+      [`%${query}%`, `%${query}%`]
+    );
+    return res.json({ message: 'Hasil pencarian guild berhasil diambil.', guilds });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function update(req, res, next) {
+  try {
+    const errorResponse = validationErrorResponse(req, res);
+    if (errorResponse) return errorResponse;
+    const [guilds] = await pool.query(
+      `SELECT guilds.id, guilds.name, guilds.description, guilds.max_members,
+              (SELECT COUNT(*) FROM guild_members WHERE guild_members.guild_id = guilds.id AND guild_members.deleted_at IS NULL) AS member_count
+       FROM guilds WHERE guilds.id = ? AND guilds.owner_id = ? AND guilds.deleted_at IS NULL LIMIT 1`,
+      [req.params.id, req.user.id]
+    );
+    if (!guilds.length) return res.status(404).json({ message: 'Guild tidak ditemukan atau kamu bukan pemiliknya.' });
+    const guild = guilds[0];
+    const maxMembers = req.body.max_members === undefined ? guild.max_members : Number(req.body.max_members);
+    if (maxMembers < Number(guild.member_count)) {
+      return res.status(422).json({ message: 'Kapasitas baru tidak boleh lebih kecil dari jumlah anggota saat ini.' });
+    }
+    await pool.query(
+      `UPDATE guilds SET name = ?, description = ?, max_members = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND owner_id = ? AND deleted_at IS NULL`,
+      [req.body.name.trim(), req.body.description || null, maxMembers, guild.id, req.user.id]
+    );
+    const [updatedGuilds] = await pool.query(
+      `SELECT id, name, description, owner_id, max_members, created_at
+       FROM guilds WHERE id = ? LIMIT 1`,
+      [guild.id]
+    );
+    return res.json({ message: 'Guild berhasil diperbarui.', guild: { ...updatedGuilds[0], member_count: guild.member_count } });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function createMission(req, res, next) {
   try {
     const errorResponse = validationErrorResponse(req, res);
@@ -367,4 +420,4 @@ async function respond(req, res, next) {
   }
 }
 
-module.exports = { list, create, createMission, contributeMission, invite, respond };
+module.exports = { list, search, create, update, createMission, contributeMission, invite, respond };

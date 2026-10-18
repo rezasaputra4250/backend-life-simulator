@@ -6,6 +6,7 @@ const { authenticate } = require('../middleware/authMiddleware');
 const router = express.Router();
 router.use(authenticate);
 router.get('/', guildController.list);
+router.get('/search', guildController.search);
 router.post(
   '/',
   [
@@ -14,6 +15,16 @@ router.post(
     body('max_members').optional().isInt({ min: 2, max: 100 }).withMessage('Jumlah anggota guild harus antara 2 sampai 100.'),
   ],
   guildController.create
+);
+router.patch(
+  '/:id',
+  [
+    param('id').isInt({ min: 1 }).withMessage('ID guild tidak valid.'),
+    body('name').isString().trim().isLength({ min: 2, max: 120 }).withMessage('Nama guild harus antara 2 sampai 120 karakter.'),
+    body('description').optional({ nullable: true }).isString().trim().isLength({ max: 255 }).withMessage('Deskripsi guild maksimal 255 karakter.'),
+    body('max_members').optional().isInt({ min: 2, max: 100 }).withMessage('Jumlah anggota guild harus antara 2 sampai 100.'),
+  ],
+  guildController.update
 );
 router.post(
   '/:id/missions',
