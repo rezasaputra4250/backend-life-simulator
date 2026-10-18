@@ -41,7 +41,16 @@ Pada Linux atau macOS, gunakan:
 cp .env.example .env
 ```
 
-Sesuaikan minimal `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, dan `JWT_SECRET`. Untuk development, `DB_NAME=backend` dapat digunakan jika database tersebut belum dipakai aplikasi lain. Jangan commit file `.env`.
+Sesuaikan minimal `APP_ENV`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, dan `JWT_SECRET`. Untuk development, `DB_NAME=backend` dapat digunakan jika database tersebut belum dipakai aplikasi lain. Jangan commit file `.env`.
+
+Nilai `APP_ENV` yang digunakan:
+
+| `APP_ENV` | Penggunaan | Branch terkait |
+| --- | --- | --- |
+| `local` | Pengembangan pada komputer developer | `local` |
+| `development` | Integrasi bersama | `develop` |
+| `staging` | Uji pra-produksi | `staging` |
+| `production` | Layanan pengguna | `main` |
 
 ### 4. Install dependency
 
