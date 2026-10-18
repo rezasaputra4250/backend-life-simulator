@@ -1,10 +1,10 @@
 # Deploy backend ke cPanel
 
-Workflow `.github/workflows/cpanel-auto-pull.yml` melakukan deploy otomatis ketika branch `main` menerima perubahan. Workflow juga dapat dijalankan manual dari GitHub Actions.
+Workflow `.github/workflows/cpanel-auto-pull.yml` melakukan deploy otomatis ketika branch `develop` atau `staging` menerima perubahan. Branch `main` dan `master` tidak pernah deploy otomatis dan hanya dapat dideploy manual dari GitHub Actions.
 
 ## Secret GitHub Actions
 
-Buat secret berikut pada environment `production` di repository GitHub:
+Buat secret berikut pada environment GitHub yang sesuai (`development`, `staging`, atau `production`):
 
 | Secret | Isi |
 | --- | --- |
@@ -32,11 +32,22 @@ Nilai `CPANEL_SSH_KNOWN_HOSTS` digunakan untuk memverifikasi identitas server da
 
 Workflow menjalankan langkah berikut di server:
 
-1. `git fetch origin main`
-2. `git checkout main`
-3. `git reset --hard origin/main`
+1. `git fetch origin <branch-deploy>`
+2. `git checkout <branch-deploy>`
+3. `git reset --hard origin/<branch-deploy>`
 4. `npm ci --omit=dev`
 5. `npm run migrate`
 6. Membuat `tmp/restart.txt`
 
 `git reset --hard` hanya dijalankan pada repository deploy di server. Jangan menyimpan perubahan manual yang belum di-commit di folder tersebut karena akan dihapus pada deploy berikutnya.
+
+## Aturan branch
+
+| Branch | Deploy otomatis | Deploy manual | Target |
+| --- | --- | --- | --- |
+| `develop` | Ya | Ya | `development` |
+| `staging` | Ya | Ya | `staging` |
+| `main` | Tidak | Ya | `production` |
+| `master` | Tidak | Ya | `production` |
+
+Untuk deploy `main` atau `master`, buka GitHub Actions, pilih workflow **Deploy Backend ke cPanel**, klik **Run workflow**, lalu pilih branch dan target `production`.

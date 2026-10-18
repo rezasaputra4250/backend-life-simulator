@@ -3,22 +3,60 @@ name: Deploy Backend ke cPanel
 on:
   push:
     branches:
-      - main
+      - develop
+      - staging
   workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch yang akan dideploy secara manual.
+        required: true
+        type: choice
+        options:
+          - develop
+          - staging
+          - main
+          - master
+        default: staging
+      target:
+        description: Environment deploy.
+        required: true
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+        default: staging
 
 permissions:
   contents: read
 
 concurrency:
-  group: deploy-backend-cpanel
+  group: deploy-backend-cpanel-${{ github.event_name == 'workflow_dispatch' && inputs.target || (github.ref_name == 'staging' && 'staging' || 'development') }}
   cancel-in-progress: false
 
 jobs:
   deploy:
     name: Pull dan restart backend cPanel
     runs-on: ubuntu-latest
-    environment: production
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.target || (github.ref_name == 'staging' && 'staging' || 'development') }}
     steps:
+      - name: Validasi branch dan target deploy
+        env:
+          DEPLOY_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
+          DEPLOY_TARGET: ${{ github.event_name == 'workflow_dispatch' && inputs.target || (github.ref_name == 'staging' && 'staging' || 'development') }}
+        run: |
+          set -euo pipefail
+
+          case "${DEPLOY_REF}:${DEPLOY_TARGET}" in
+            develop:development|staging:staging|main:production|master:production)
+              echo "Branch ${DEPLOY_REF} akan dideploy ke ${DEPLOY_TARGET}."
+              ;;
+            *)
+              echo "Kombinasi branch dan target deploy tidak valid: ${DEPLOY_REF} -> ${DEPLOY_TARGET}."
+              exit 1
+              ;;
+          esac
+
       - name: Validasi secret deploy
         env:
           CPANEL_SSH_HOST: ${{ secrets.CPANEL_SSH_HOST }}
@@ -57,7 +95,7 @@ jobs:
           CPANEL_SSH_USER: ${{ secrets.CPANEL_SSH_USER }}
           CPANEL_BACKEND_PATH: ${{ secrets.CPANEL_BACKEND_PATH }}
           CPANEL_NPM_BIN: ${{ secrets.CPANEL_NPM_BIN }}
-          DEPLOY_BRANCH: main
+          DEPLOY_BRANCH: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
         run: |
           set -euo pipefail
           ssh_dir="$RUNNER_TEMP/cpanel-ssh"
