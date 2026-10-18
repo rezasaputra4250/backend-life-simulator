@@ -189,7 +189,10 @@ async function migrate() {
       owner_id BIGINT UNSIGNED NOT NULL,
       name VARCHAR(120) NOT NULL,
       description VARCHAR(255) NULL,
-      max_members INT UNSIGNED NOT NULL DEFAULT 20,
+      level INT UNSIGNED NOT NULL DEFAULT 1,
+      experience INT UNSIGNED NOT NULL DEFAULT 0,
+      experience_to_next_level INT UNSIGNED NOT NULL DEFAULT 100,
+      max_members INT UNSIGNED NOT NULL DEFAULT 10,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX guilds_owner_id_index (owner_id),
@@ -739,6 +742,30 @@ async function migrate() {
       );
     }
   }
+
+  const [guildProgressColumns] = await connection.query(
+    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'guilds'
+       AND COLUMN_NAME IN ('level', 'experience', 'experience_to_next_level')`,
+    [env.database.name]
+  );
+  const guildProgressColumnNames = guildProgressColumns.map((column) => column.COLUMN_NAME);
+  if (!guildProgressColumnNames.includes('level')) {
+    await connection.query('ALTER TABLE guilds ADD COLUMN level INT UNSIGNED NOT NULL DEFAULT 1 AFTER description');
+  }
+  if (!guildProgressColumnNames.includes('experience')) {
+    await connection.query('ALTER TABLE guilds ADD COLUMN experience INT UNSIGNED NOT NULL DEFAULT 0 AFTER level');
+  }
+  if (!guildProgressColumnNames.includes('experience_to_next_level')) {
+    await connection.query('ALTER TABLE guilds ADD COLUMN experience_to_next_level INT UNSIGNED NOT NULL DEFAULT 100 AFTER experience');
+  }
+  await connection.query(`
+    UPDATE guilds
+    SET level = GREATEST(1, COALESCE(level, 1)),
+        experience = GREATEST(0, COALESCE(experience, 0)),
+        experience_to_next_level = GREATEST(100, COALESCE(experience_to_next_level, 100)),
+        max_members = 10 + ((GREATEST(1, COALESCE(level, 1)) - 1) * 5)
+  `);
 
   const [financialTransactionAccountColumns] = await connection.query(
     `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS

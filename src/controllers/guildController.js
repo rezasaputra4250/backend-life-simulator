@@ -3,6 +3,36 @@ const pool = require('../config/database');
 const { recordGuildContributionReward } = require('../services/rewardService');
 const { createGuildMission, syncGuildMissionContribution } = require('../services/missionDomainService');
 
+function guildCapacityForLevel(level) {
+  return 10 + (Math.max(1, Number(level) || 1) - 1) * 5;
+}
+
+function guildExperienceForNextLevel(level) {
+  return Math.max(100, Math.round(100 * Math.pow(1.5, Math.max(0, Number(level) || 1) - 1)));
+}
+
+async function addGuildExperience(connection, guildId, amount) {
+  const [guilds] = await connection.query(
+    'SELECT level, experience, experience_to_next_level FROM guilds WHERE id = ? AND deleted_at IS NULL LIMIT 1 FOR UPDATE',
+    [guildId]
+  );
+  if (!guilds.length) return;
+  let level = Math.max(1, Number(guilds[0].level) || 1);
+  let experience = Math.max(0, Number(guilds[0].experience) || 0) + Math.max(0, Number(amount) || 0);
+  let experienceToNextLevel = Math.max(100, Number(guilds[0].experience_to_next_level) || guildExperienceForNextLevel(level));
+  while (experience >= experienceToNextLevel) {
+    experience -= experienceToNextLevel;
+    level += 1;
+    experienceToNextLevel = guildExperienceForNextLevel(level);
+  }
+  await connection.query(
+    `UPDATE guilds
+     SET level = ?, experience = ?, experience_to_next_level = ?, max_members = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND deleted_at IS NULL`,
+    [level, experience, experienceToNextLevel, guildCapacityForLevel(level), guildId]
+  );
+}
+
 function validationErrorResponse(req, res) {
   const errors = validationResult(req);
   if (errors.isEmpty()) return null;
@@ -16,6 +46,7 @@ async function list(req, res, next) {
   try {
     const [guilds] = await pool.query(
       `SELECT guilds.id, guilds.name, guilds.description, guilds.owner_id,
+              guilds.level, guilds.experience, guilds.experience_to_next_level,
               guilds.max_members, guilds.created_at,
               COUNT(all_members.id) AS member_count
        FROM guilds
@@ -24,7 +55,9 @@ async function list(req, res, next) {
        INNER JOIN guild_members AS all_members ON all_members.guild_id = guilds.id
          AND all_members.deleted_at IS NULL
        WHERE guilds.deleted_at IS NULL
-       GROUP BY guilds.id
+       GROUP BY guilds.id, guilds.name, guilds.description, guilds.owner_id,
+                guilds.level, guilds.experience, guilds.experience_to_next_level,
+                guilds.max_members, guilds.created_at
        ORDER BY guilds.updated_at DESC`,
       [req.user.id]
     );
@@ -135,7 +168,8 @@ async function search(req, res, next) {
     const query = String(req.query.q || '').trim();
     if (query.length < 2) return res.status(422).json({ message: 'Masukkan minimal 2 karakter untuk mencari guild.' });
     const [guilds] = await pool.query(
-      `SELECT guilds.id, guilds.name, guilds.description, guilds.owner_id, guilds.max_members,
+      `SELECT guilds.id, guilds.name, guilds.description, guilds.owner_id,
+              guilds.level, guilds.experience, guilds.experience_to_next_level, guilds.max_members,
               users.name AS owner_name, COUNT(guild_members.id) AS member_count,
               MAX(CASE WHEN guild_members.user_id = ? THEN 1 ELSE 0 END) AS is_member,
               MAX(CASE WHEN guild_join_requests.requester_id = ? AND guild_join_requests.status = 'pending' THEN 1 ELSE 0 END) AS has_pending_request
@@ -144,7 +178,9 @@ async function search(req, res, next) {
        LEFT JOIN guild_members ON guild_members.guild_id = guilds.id AND guild_members.deleted_at IS NULL
        LEFT JOIN guild_join_requests ON guild_join_requests.guild_id = guilds.id AND guild_join_requests.deleted_at IS NULL
        WHERE guilds.deleted_at IS NULL AND (guilds.name LIKE ? OR guilds.description LIKE ?)
-       GROUP BY guilds.id, guilds.name, guilds.description, guilds.owner_id, guilds.max_members, users.name
+       GROUP BY guilds.id, guilds.name, guilds.description, guilds.owner_id,
+                guilds.level, guilds.experience, guilds.experience_to_next_level,
+                guilds.max_members, users.name
        ORDER BY guilds.updated_at DESC, guilds.name ASC LIMIT 30`,
       [req.user.id, req.user.id, `%${query}%`, `%${query}%`]
     );
@@ -159,24 +195,21 @@ async function update(req, res, next) {
     const errorResponse = validationErrorResponse(req, res);
     if (errorResponse) return errorResponse;
     const [guilds] = await pool.query(
-      `SELECT guilds.id, guilds.name, guilds.description, guilds.max_members,
+      `SELECT guilds.id, guilds.name, guilds.description, guilds.level,
+              guilds.experience, guilds.experience_to_next_level, guilds.max_members,
               (SELECT COUNT(*) FROM guild_members WHERE guild_members.guild_id = guilds.id AND guild_members.deleted_at IS NULL) AS member_count
        FROM guilds WHERE guilds.id = ? AND guilds.owner_id = ? AND guilds.deleted_at IS NULL LIMIT 1`,
       [req.params.id, req.user.id]
     );
     if (!guilds.length) return res.status(404).json({ message: 'Guild tidak ditemukan atau kamu bukan pemiliknya.' });
     const guild = guilds[0];
-    const maxMembers = req.body.max_members === undefined ? guild.max_members : Number(req.body.max_members);
-    if (maxMembers < Number(guild.member_count)) {
-      return res.status(422).json({ message: 'Kapasitas baru tidak boleh lebih kecil dari jumlah anggota saat ini.' });
-    }
     await pool.query(
-      `UPDATE guilds SET name = ?, description = ?, max_members = ?, updated_at = CURRENT_TIMESTAMP
+      `UPDATE guilds SET name = ?, description = ?, updated_at = CURRENT_TIMESTAMP
        WHERE id = ? AND owner_id = ? AND deleted_at IS NULL`,
-      [req.body.name.trim(), req.body.description || null, maxMembers, guild.id, req.user.id]
+      [req.body.name.trim(), req.body.description || null, guild.id, req.user.id]
     );
     const [updatedGuilds] = await pool.query(
-      `SELECT id, name, description, owner_id, max_members, created_at
+      `SELECT id, name, description, owner_id, level, experience, experience_to_next_level, max_members, created_at
        FROM guilds WHERE id = ? LIMIT 1`,
       [guild.id]
     );
@@ -400,6 +433,7 @@ async function contributeMission(req, res, next) {
        WHERE id = ?`,
       [nextProgress, completed ? 'completed' : 'active', completed ? 1 : 0, completed ? new Date() : null, mission.id]
     );
+    await addGuildExperience(connection, mission.guild_id, applied * 10);
     const reward = Math.max(1, Math.floor(Number(mission.reward) * applied / Number(mission.target_progress)));
     const rewardResult = await recordGuildContributionReward(connection, req.user.id, mission, reward);
     await connection.query(
@@ -430,8 +464,8 @@ async function create(req, res, next) {
         return res.status(409).json({ message: 'Setiap pengguna hanya dapat memiliki satu guild.' });
       }
       const [result] = await connection.query(
-        'INSERT INTO guilds (owner_id, name, description, max_members) VALUES (?, ?, ?, ?)',
-        [req.user.id, req.body.name, req.body.description || null, req.body.max_members || 20]
+        'INSERT INTO guilds (owner_id, name, description, level, experience, experience_to_next_level, max_members) VALUES (?, ?, ?, 1, 0, 100, 10)',
+        [req.user.id, req.body.name, req.body.description || null]
       );
       await connection.query(
         "INSERT INTO guild_members (guild_id, user_id, role) VALUES (?, ?, 'owner')",
@@ -445,7 +479,10 @@ async function create(req, res, next) {
           name: req.body.name,
           description: req.body.description || null,
           owner_id: req.user.id,
-          max_members: req.body.max_members || 20,
+          level: 1,
+          experience: 0,
+          experience_to_next_level: 100,
+          max_members: 10,
           member_count: 1,
           members: [{ id: req.user.id, name: req.user.name, email: req.user.email, role: 'owner' }],
         },
