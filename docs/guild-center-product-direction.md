@@ -48,6 +48,40 @@ Fitur guild yang direncanakan:
 - progres atau level guild;
 - aktivitas dan riwayat kontribusi yang dapat diaudit.
 
+### 4. Leaderboard
+
+Leaderboard menjadi lapisan kompetitif dan motivasi tambahan untuk karakter dan guild. Leaderboard tidak boleh menjadi satu-satunya ukuran nilai user; progres solo, kontribusi, dan pencapaian tetap perlu ditampilkan secara terpisah.
+
+#### Player Leaderboard
+
+Player leaderboard menampilkan peringkat individual berdasarkan metrik yang ditentukan, misalnya experience, mission completion, streak, atau skor kontribusi.
+
+Tingkat kesulitan harus menjadi dimensi leaderboard player. User yang bermain pada tingkat kesulitan berbeda tidak langsung dibandingkan dalam papan yang sama.
+
+Papan yang direncanakan:
+
+- `easy`;
+- `normal`;
+- `hard`;
+- `expert`.
+
+Setiap papan perlu memiliki scope waktu agar peringkat dapat diikuti dan di-reset secara sehat, misalnya `daily`, `weekly`, `monthly`, dan `all_time`. Peringkat harus menyimpan snapshot atau sumber event yang dapat diaudit sehingga perubahan reward, koreksi EXP, atau penghapusan data tidak menghasilkan posisi yang tidak dapat dijelaskan.
+
+#### Guild Leaderboard
+
+Guild leaderboard menampilkan performa kolektif guild berdasarkan metrik seperti total kontribusi anggota, guild mission completion, activity score, atau progres guild.
+
+Guild leaderboard sebaiknya memiliki filter periode dan region atau kategori bila skala produk membutuhkannya. Kontribusi satu user tidak boleh dihitung ganda ketika sudah masuk ke agregat guild.
+
+#### Prinsip Fairness Leaderboard
+
+- Player leaderboard hanya membandingkan data dalam difficulty dan periode yang sama.
+- Metrik, formula score, dan tie-breaker harus terdokumentasi serta versioned.
+- Reward leaderboard tidak boleh mengubah hasil mission atau EXP secara retroaktif.
+- Aktivitas yang dibatalkan, curang, atau berasal dari akun yang terkena restriction tidak dihitung.
+- Koreksi score harus meninggalkan audit trail.
+- UI harus menampilkan posisi user sendiri walaupun user berada di luar peringkat teratas.
+
 ## Aturan Pembuatan Guild
 
 Tidak semua user dapat langsung membuat guild. Pembuatan guild harus melalui eligibility rule dan, bila diperlukan, persetujuan.
@@ -144,6 +178,12 @@ Permission harus diperiksa di service layer, bukan hanya dari data yang dikirim 
 - reward, batas waktu, dan aturan kegagalan Direct Mission;
 - kebijakan privasi untuk pencarian user dan pengiriman mission;
 - kebijakan moderasi untuk spam, harassment, dan guild yang tidak aktif.
+- metrik utama dan formula score untuk player leaderboard;
+- apakah leaderboard player memakai satu papan per difficulty atau juga memiliki papan gabungan;
+- periode leaderboard dan aturan reset atau season;
+- tie-breaker ketika dua player atau guild memiliki score yang sama;
+- jenis reward, distribusi reward, dan batasan anti-farming;
+- apakah guild leaderboard mengikuti difficulty tertentu atau memakai score guild tersendiri.
 
 ## Batasan Perubahan
 
