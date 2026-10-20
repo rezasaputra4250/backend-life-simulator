@@ -312,6 +312,85 @@ Aktivitas yang dibatalkan atau gagal karena error server harus memiliki aturan r
 - kapan biaya stamina dipotong pada quest dan mission;
 - apakah stamina reset tetap mengikuti `Asia/Jakarta` atau timezone lokal masing-masing user.
 
+### 7. Sistem Komunikasi
+
+Guild Center menyediakan beberapa ruang komunikasi dengan target dan permission yang berbeda:
+
+| Ruang | Audience | Pengirim | Visibility |
+| --- | --- | --- | --- |
+| `world_chat` | Seluruh user atau channel publik | User yang memenuhi rule chat | Publik di dalam aplikasi |
+| `guild_chat` | Anggota guild | Anggota guild | Terbatas pada guild |
+| `private_chat` | Satu user atau conversation tertentu | Participant conversation | Hanya participant |
+| `guild_announcement` | Anggota guild atau audience yang ditentukan | Guild admin | Terbatas pada guild atau audience announcement |
+
+#### World Chat
+
+World Chat menjadi ruang percakapan umum untuk interaksi lintas guild dan solo player.
+
+Aturan awal:
+
+- hanya user dengan account status yang valid dapat mengirim pesan;
+- rate limit dan cooldown diterapkan untuk mencegah spam;
+- pesan memiliki timestamp, author, dan status moderation;
+- user dapat melakukan report, mute, atau block sesuai kebijakan moderation;
+- pesan yang dihapus moderator tetap memiliki audit event tanpa ditampilkan kepada user.
+
+#### Guild Chat
+
+Guild Chat hanya dapat diakses oleh anggota guild yang masih aktif. Akses harus diverifikasi berdasarkan `guild_membership`, bukan hanya `guild_id` yang dikirim client.
+
+Guild dapat memiliki channel utama dan, bila diperlukan, channel tambahan berdasarkan role atau topik. Anggota yang dikeluarkan, suspended, atau archived tidak boleh mengirim pesan baru ke guild chat.
+
+#### Private Chat
+
+Private Chat digunakan untuk percakapan satu lawan satu atau conversation terbatas antar participant.
+
+Aturan awal:
+
+- hanya participant yang dapat membaca pesan;
+- penambahan participant membutuhkan permission dari conversation owner atau seluruh participant sesuai tipe conversation;
+- user dapat menghapus conversation dari view sendiri tanpa menghapus histori participant lain;
+- block atau privacy setting dapat mencegah user baru mengirim private chat;
+- pesan perlu memiliki delivery status dan read status bila fitur tersebut dibutuhkan.
+
+#### Guild Announcement
+
+Guild Announcement adalah pesan resmi guild yang dapat ditampilkan sebagai informasi penting kepada anggota guild.
+
+Hanya user dengan role `guild_admin` atau permission announcement khusus yang dapat membuat, mengedit, publish, atau mengarsipkan announcement. Anggota biasa hanya dapat membaca announcement dan melakukan acknowledge bila fitur tersebut diaktifkan.
+
+Announcement perlu mendukung:
+
+- title, body, author, guild, status, dan timestamp;
+- status `draft`, `published`, `archived`, atau `expired`;
+- audience anggota guild, role tertentu, atau audience lain yang diizinkan;
+- pinning dan expiration date;
+- audit trail untuk create, update, publish, archive, dan perubahan audience;
+- notifikasi kepada audience tanpa menggandakan notifikasi saat publish diulang.
+
+Permission announcement harus diperiksa di backend pada setiap operasi. Client tidak boleh menentukan sendiri bahwa seorang user adalah admin hanya berdasarkan role yang disimpan lokal.
+
+#### Moderation dan Data Policy
+
+Semua ruang chat membutuhkan kebijakan moderation dan retensi data yang konsisten:
+
+- profanity, spam, harassment, dan konten berbahaya dapat dilaporkan atau difilter;
+- moderator atau admin platform dapat melakukan hide, remove, lock, atau restrict sesuai permission;
+- guild admin hanya memoderasi ruang guild miliknya, bukan World Chat atau private chat user lain;
+- private chat membutuhkan perlindungan akses yang lebih ketat dan tidak boleh masuk ke response user lain;
+- payload chat harus divalidasi untuk ukuran, format, dan encoding;
+- event moderation, edit, delete, dan report perlu dapat diaudit.
+
+#### Keputusan yang Masih Perlu Ditetapkan
+
+- apakah World Chat menggunakan satu channel global atau beberapa channel berdasarkan region atau topik;
+- apakah Guild Chat mendukung channel tambahan dan thread;
+- apakah Private Chat hanya satu lawan satu atau juga group conversation;
+- apakah guild admin dapat menghapus pesan anggota atau hanya melakukan report ke moderator;
+- durasi edit dan delete pesan;
+- retensi pesan, pagination, unread counter, dan strategi realtime delivery;
+- apakah announcement dapat dikirim sebagai push notification dan apakah anggota wajib acknowledge.
+
 ## Batasan Perubahan
 
 Catatan ini belum mengubah runtime behavior, schema, atau endpoint. Setiap implementasi berikutnya harus dibuat sebagai perubahan terpisah dengan migration, compatibility plan, validasi permission, dan test untuk lifecycle yang terdampak.
