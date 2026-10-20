@@ -177,13 +177,71 @@ Permission harus diperiksa di service layer, bukan hanya dari data yang dikirim 
 - apakah issuer dapat membatalkan mission setelah diterima;
 - reward, batas waktu, dan aturan kegagalan Direct Mission;
 - kebijakan privasi untuk pencarian user dan pengiriman mission;
-- kebijakan moderasi untuk spam, harassment, dan guild yang tidak aktif.
+- kebijakan moderasi untuk spam, harassment, dan guild yang tidak aktif;
 - metrik utama dan formula score untuk player leaderboard;
 - apakah leaderboard player memakai satu papan per difficulty atau juga memiliki papan gabungan;
 - periode leaderboard dan aturan reset atau season;
 - tie-breaker ketika dua player atau guild memiliki score yang sama;
 - jenis reward, distribusi reward, dan batasan anti-farming;
 - apakah guild leaderboard mengikuti difficulty tertentu atau memakai score guild tersendiri.
+- apakah quest mendukung satu jawaban benar atau multiple correct answers;
+- batas attempt, durasi, dan aturan retry untuk setiap difficulty;
+- siapa yang dapat membuat, meninjau, dan menerbitkan quest;
+- apakah quest competitive dapat digunakan dalam Direct Mission dan Guild Mission.
+
+### 5. Quest Pilihan Ganda
+
+Quest dapat berisi rangkaian soal pilihan ganda yang harus dijawab user untuk menyelesaikan objective tertentu. Quest menjadi bentuk aktivitas yang lebih terstruktur dibanding mission biasa dan dapat digunakan untuk pembelajaran, onboarding, event, atau tantangan guild.
+
+Struktur dasar yang perlu didukung:
+
+- quest memiliki judul, deskripsi, kategori, difficulty, status, dan batas waktu opsional;
+- quest memiliki satu atau lebih question;
+- setiap question memiliki prompt dan beberapa option;
+- hanya satu option atau beberapa option dapat ditetapkan sebagai jawaban benar sesuai tipe soal;
+- question dapat memiliki explanation yang ditampilkan setelah jawaban atau setelah quest selesai;
+- urutan question dapat ditentukan dan dapat diacak melalui konfigurasi;
+- quest dapat ditujukan untuk solo player, user tertentu melalui Direct Mission, atau anggota guild melalui Guild Mission.
+
+#### Aturan Jawaban dan Attempt
+
+- Jawaban dinilai oleh backend, bukan dipercaya dari score yang dikirim client.
+- Setiap attempt menyimpan user, quest, jawaban, score, status, dan timestamp.
+- Jumlah attempt dapat dibatasi per quest jika dibutuhkan untuk menjaga fairness.
+- Quest dapat menggunakan mode practice tanpa leaderboard dan mode competitive yang berkontribusi pada score.
+- Setelah submit, jawaban yang sudah dinilai tidak boleh diubah tanpa membuat event koreksi.
+- Question dan answer key yang sudah dipakai pada attempt harus memiliki snapshot agar perubahan konten tidak mengubah histori.
+
+#### Reward dan Difficulty
+
+Difficulty quest mengikuti difficulty yang sudah digunakan aplikasi, yaitu `easy`, `normal`, `hard`, dan `expert`. Difficulty memengaruhi kompleksitas soal, waktu, jumlah attempt, atau reward sesuai konfigurasi produk.
+
+Reward quest dapat berupa:
+
+- experience untuk karakter;
+- skill progress;
+- achievement;
+- guild contribution jika quest merupakan aktivitas guild;
+- score leaderboard bila quest berada dalam mode competitive.
+
+Reward harus diberikan secara idempotent. Submit ulang request yang sama tidak boleh menggandakan experience, contribution, atau reward lainnya.
+
+#### Authoring dan Validasi Konten
+
+Pembuatan quest dan question sebaiknya dibatasi berdasarkan role, misalnya system admin, moderator, atau guild role tertentu. Konten yang belum selesai ditinjau berada pada status draft dan tidak dapat dimainkan oleh user umum.
+
+Status konten yang disarankan:
+
+- `draft` — sedang dibuat atau diedit;
+- `review` — menunggu pemeriksaan;
+- `published` — dapat dimainkan sesuai visibility;
+- `archived` — tidak menerima attempt baru.
+
+Konten yang dipublikasikan perlu memiliki validasi minimal: jumlah option cukup, answer key valid, tidak ada question kosong, dan reward serta difficulty memiliki konfigurasi yang sah.
+
+#### Relasi dengan Leaderboard
+
+Quest competitive dapat menjadi sumber score player leaderboard atau guild leaderboard. Score perlu menyimpan referensi ke `quest_attempt`, difficulty, formula version, dan waktu penyelesaian. Quest practice tidak boleh memengaruhi leaderboard.
 
 ## Batasan Perubahan
 
