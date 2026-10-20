@@ -36,6 +36,7 @@ function formatUser(user) {
       department: user.department,
       phone: user.phone,
       gender: user.gender,
+      religion: user.religion,
       birth_date: user.birth_date,
       avatar_url: user.avatar_url,
       address: user.address,
@@ -298,7 +299,7 @@ async function login(req, res, next) {
               companies.id AS company_id, companies.name AS company_name,
               companies.legal_name AS company_legal_name, companies.code AS company_code,
               user_profiles.employee_number, user_profiles.position, user_profiles.department,
-              user_profiles.phone, user_profiles.gender, user_profiles.birth_date,
+              user_profiles.phone, user_profiles.gender, user_profiles.religion, user_profiles.birth_date,
               user_profiles.avatar_url, user_profiles.address, user_profiles.city,
               user_profiles.province, user_profiles.country, user_profiles.postal_code,
               user_profiles.joined_at, user_profiles.bio,
@@ -358,7 +359,7 @@ async function updateProfile(req, res, next) {
     const userFields = ['name', 'email'];
     const profileFields = [
       'employee_number', 'position', 'department', 'phone', 'gender', 'birth_date',
-      'avatar_url', 'address', 'city', 'province', 'country', 'postal_code', 'bio',
+      'religion', 'avatar_url', 'address', 'city', 'province', 'country', 'postal_code', 'bio',
     ];
     const connection = await pool.getConnection();
     try {
