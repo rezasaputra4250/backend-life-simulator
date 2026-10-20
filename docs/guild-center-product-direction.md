@@ -243,6 +243,75 @@ Konten yang dipublikasikan perlu memiliki validasi minimal: jumlah option cukup,
 
 Quest competitive dapat menjadi sumber score player leaderboard atau guild leaderboard. Score perlu menyimpan referensi ke `quest_attempt`, difficulty, formula version, dan waktu penyelesaian. Quest practice tidak boleh memengaruhi leaderboard.
 
+### 6. Sistem Stamina
+
+Stamina menjadi resource harian yang membatasi aktivitas tertentu dan memberi ritme penggunaan aplikasi. Stamina harus berkurang secara progresif berdasarkan waktu dan aktivitas, bukan hanya berkurang ketika user membuka aplikasi.
+
+Aturan awal yang direncanakan:
+
+- stamina di-reset setiap hari pada pukul `05:00`;
+- reset menggunakan timezone yang ditetapkan oleh aplikasi, dengan default `Asia/Jakarta`;
+- stamina berkurang seiring waktu selama window harian berjalan;
+- stamina juga dapat dikonsumsi oleh aktivitas tertentu seperti quest atau mission sesuai konfigurasi;
+- target awal stamina habis pada pukul `21:00` sebagai interpretasi “jam 9”;
+- setelah stamina habis, aktivitas yang membutuhkan stamina ditolak atau masuk status terbatas sampai reset berikutnya;
+- sisa stamina tidak dibawa ke hari berikutnya kecuali aturan khusus menyatakan sebaliknya.
+
+#### Perhitungan Stamina
+
+Perhitungan stamina harus berbasis timestamp dan dapat direkonstruksi oleh backend. Backend tidak boleh mengandalkan timer dari client sebagai sumber kebenaran.
+
+Konfigurasi yang perlu tersedia:
+
+- `max_stamina`;
+- `reset_time`;
+- `depletion_time`;
+- laju pengurangan stamina;
+- biaya stamina per aktivitas atau difficulty;
+- grace period bila diperlukan;
+- aturan pembulatan dan minimum value.
+
+Nilai stamina yang ditampilkan client harus dihitung dari server time atau response yang memiliki timestamp referensi. Request yang datang bersamaan harus menggunakan transaksi atau mekanisme locking agar stamina tidak dapat dipakai melebihi saldo yang tersedia.
+
+#### Item Stamina dari Shop
+
+User dapat membeli item stamina dari shop, lalu menggunakan item tersebut untuk menambah stamina.
+
+Aturan awal:
+
+- shop menyimpan item, harga, currency, jumlah stamina, status, dan batas pembelian;
+- pembelian mengurangi currency dan menambah item ke inventory dalam satu transaksi;
+- penggunaan item mengurangi quantity inventory dan menambah stamina secara atomic;
+- stamina tambahan dapat memiliki batas `max_stamina` atau dapat melampaui batas melalui konfigurasi item;
+- setiap pembelian dan penggunaan item memiliki transaction atau idempotency key;
+- item yang sudah dibeli tidak boleh hilang ketika request client timeout atau diulang;
+- item tidak dapat digunakan setelah expired atau ketika item berstatus inactive;
+- seluruh perubahan stamina dan inventory memiliki audit event.
+
+Item stamina dapat dibedakan menjadi:
+
+- `restore_fixed` — menambah jumlah stamina tetap;
+- `restore_percent` — menambah persentase dari kapasitas stamina;
+- `refill` — mengisi stamina sampai batas tertentu;
+- `extend_window` — memperpanjang window aktivitas jika fitur ini dibutuhkan pada fase berikutnya.
+
+#### Dampak pada Quest dan Mission
+
+Quest atau mission yang membutuhkan stamina harus mendefinisikan kapan biaya stamina dipotong: saat dimulai, saat attempt dibuat, atau saat submit. Pilihan ini harus konsisten per tipe aktivitas dan mencegah user kehilangan stamina karena request gagal.
+
+Aktivitas yang dibatalkan atau gagal karena error server harus memiliki aturan refund yang eksplisit. Refund tidak boleh diberikan hanya karena client mengulang request tanpa validasi idempotency.
+
+#### Keputusan yang Masih Perlu Ditetapkan
+
+- apakah “jam 9” berarti `09:00` atau `21:00`; rancangan awal dokumen ini memakai `21:00`;
+- apakah stamina hanya berkurang berdasarkan waktu atau juga berdasarkan konsumsi aktivitas;
+- kapasitas maksimum stamina dan formula depletion per difficulty;
+- apakah stamina tambahan dari item boleh melebihi `max_stamina`;
+- currency yang digunakan untuk membeli item stamina;
+- apakah pembelian memiliki batas harian atau weekly limit;
+- kapan biaya stamina dipotong pada quest dan mission;
+- apakah stamina reset tetap mengikuti `Asia/Jakarta` atau timezone lokal masing-masing user.
+
 ## Batasan Perubahan
 
 Catatan ini belum mengubah runtime behavior, schema, atau endpoint. Setiap implementasi berikutnya harus dibuat sebagai perubahan terpisah dengan migration, compatibility plan, validasi permission, dan test untuk lifecycle yang terdampak.
