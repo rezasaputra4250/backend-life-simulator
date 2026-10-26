@@ -90,17 +90,20 @@ async function unlockDefaultSkills(userId) {
 
 async function createDefaultMissions(userId) {
   const [users] = await pool.query(
-    `SELECT users.difficulty, player_classes.name AS class_name
+    `SELECT users.difficulty, player_classes.name AS class_name, user_profiles.religion
      FROM users
      LEFT JOIN player_classes ON player_classes.id = users.class_id AND player_classes.deleted_at IS NULL
+     LEFT JOIN user_profiles ON user_profiles.user_id = users.id AND user_profiles.deleted_at IS NULL
      WHERE users.id = ? AND users.deleted_at IS NULL LIMIT 1`,
     [userId]
   );
   const difficulty = users[0]?.difficulty || 'easy';
   const className = users[0]?.class_name || null;
+  const religion = users[0]?.religion || null;
 
   for (const mission of allMissionSeeds) {
     if (mission.required_class && mission.required_class !== className) continue;
+    if (mission.required_religion && mission.required_religion !== religion) continue;
     await ensureSystemMission(pool, userId, difficulty, {
       ...mission,
       frequency: mission.frequency || 'daily',

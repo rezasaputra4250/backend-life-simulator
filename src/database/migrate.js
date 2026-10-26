@@ -100,6 +100,7 @@ async function migrate() {
       province VARCHAR(120) NULL,
       country VARCHAR(120) NOT NULL DEFAULT 'Indonesia',
       postal_code VARCHAR(20) NULL,
+      religion VARCHAR(40) NULL,
       joined_at DATE NULL,
       bio TEXT NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -302,6 +303,7 @@ async function migrate() {
       detail VARCHAR(255) NULL,
       difficulty ENUM('easy', 'normal', 'hard', 'expert') NOT NULL DEFAULT 'easy',
       required_class VARCHAR(80) NULL,
+      required_religion VARCHAR(40) NULL,
       reward INT UNSIGNED NOT NULL DEFAULT 0,
       reward_type ENUM('xp', 'skill', 'item', 'badge') NOT NULL DEFAULT 'xp',
       reward_name VARCHAR(160) NULL,
@@ -313,7 +315,7 @@ async function migrate() {
       grant_player_experience TINYINT(1) NOT NULL DEFAULT 1,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      UNIQUE KEY missions_owner_scope_title_date_difficulty_unique (user_id, category, guild_id, title, mission_date, difficulty, required_class),
+      UNIQUE KEY missions_owner_scope_title_date_difficulty_unique (user_id, category, guild_id, title, mission_date, difficulty, required_class, required_religion),
       INDEX missions_user_id_completed_index (user_id, completed),
       INDEX missions_guild_status_index (guild_id, status),
       CONSTRAINT missions_user_id_foreign
@@ -1221,6 +1223,10 @@ async function migrate() {
     await connection.query('ALTER TABLE missions ADD COLUMN required_class VARCHAR(80) NULL AFTER difficulty');
   }
 
+  if (!missionColumnNames.includes('required_religion')) {
+    await connection.query('ALTER TABLE missions ADD COLUMN required_religion VARCHAR(40) NULL AFTER required_class');
+  }
+
   const [sharedMissionColumns] = await connection.query(
     `SELECT COLUMN_NAME
      FROM INFORMATION_SCHEMA.COLUMNS
@@ -1339,8 +1345,26 @@ async function migrate() {
     await connection.query('ALTER TABLE missions DROP INDEX missions_owner_scope_title_date_difficulty_unique');
   }
   await connection.query(
-    'ALTER TABLE missions ADD UNIQUE KEY missions_owner_scope_title_date_difficulty_unique (user_id, category, guild_id, title, mission_date, difficulty, required_class)'
+    'ALTER TABLE missions ADD UNIQUE KEY missions_owner_scope_title_date_difficulty_unique (user_id, category, guild_id, title, mission_date, difficulty, required_class, required_religion)'
   );
+
+  const [religionColumns] = await connection.query(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'user_profiles' AND COLUMN_NAME = 'religion'`,
+    [env.database.name]
+  );
+  if (!religionColumns.length) {
+    await connection.query('ALTER TABLE user_profiles ADD COLUMN religion VARCHAR(40) NULL AFTER gender');
+  }
+
+  const { muslimHabitSeeds } = require('../constants/muslimHabits');
+  for (const mission of muslimHabitSeeds) {
+    await connection.query(
+      'UPDATE missions SET required_religion = ? WHERE title = ? AND required_religion IS NULL',
+      [mission.required_religion, mission.title]
+    );
+  }
 
   await connection.query(
     `INSERT IGNORE INTO missions
@@ -1595,15 +1619,17 @@ async function migrate() {
   );
 
   const [activeUsers] = await connection.query(
-    `SELECT users.id, users.difficulty, player_classes.name AS class_name
+    `SELECT users.id, users.difficulty, player_classes.name AS class_name, user_profiles.religion
      FROM users
      LEFT JOIN player_classes ON player_classes.id = users.class_id AND player_classes.deleted_at IS NULL
+     LEFT JOIN user_profiles ON user_profiles.user_id = users.id AND user_profiles.deleted_at IS NULL
      WHERE users.deleted_at IS NULL ORDER BY users.id ASC`
   );
   for (const user of activeUsers) {
     await ensureUserSkills(connection, user.id, user.class_name);
     for (const mission of require('../constants/missions').allMissionSeeds) {
       if (mission.required_class && mission.required_class !== user.class_name) continue;
+      if (mission.required_religion && mission.required_religion !== user.religion) continue;
       await ensureSystemMission(connection, user.id, user.difficulty || 'easy', {
         ...mission,
         frequency: mission.frequency || 'daily',

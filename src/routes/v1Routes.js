@@ -13,6 +13,7 @@ const rpgController = require('../controllers/rpgController');
 const customMissionController = require('../controllers/customMissionController');
 const notificationController = require('../controllers/notificationController');
 const adminController = require('../controllers/adminController');
+const { religionValues } = require('../constants/religions');
 
 const router = express.Router();
 router.use('/auth', authRoutes);
@@ -24,7 +25,7 @@ router.patch('/me/profile', authenticate, [
   body('position').optional({ nullable: true }).isString().trim().isLength({ max: 120 }).withMessage('Posisi maksimal 120 karakter.'),
   body('department').optional({ nullable: true }).isString().trim().isLength({ max: 120 }).withMessage('Departemen maksimal 120 karakter.'),
   body('phone').optional({ nullable: true }).isString().trim().isLength({ max: 40 }).withMessage('Nomor telepon maksimal 40 karakter.'),
-  body('religion').optional({ nullable: true }).isIn(['islam', 'kristen', 'katolik', 'hindu', 'buddha', 'konghucu', 'lainnya', 'tidak_menjawab']).withMessage('Preferensi agama tidak valid.'),
+  body('religion').optional({ nullable: true }).isIn(religionValues).withMessage('Pilihan agama tidak valid.'),
   body('bio').optional({ nullable: true }).isString().trim().isLength({ max: 2000 }).withMessage('Bio maksimal 2000 karakter.'),
 ], authController.updateProfile);
 router.patch('/me/password', authenticate, [
