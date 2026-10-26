@@ -95,6 +95,38 @@ function getPreviousDate(dateValue) {
   return date.toISOString().slice(0, 10);
 }
 
+function calculateDailyStreak(days) {
+  if (!days.length) return { streak_days: 0, last_completed_date: null, status: 'none' };
+
+  const today = days[0].today;
+  const firstDay = days.find((day) => day.mission_date === today);
+  const todayCompleted = Boolean(firstDay)
+    && Number(firstDay.completed_missions) === Number(firstDay.total_missions)
+    && Number(firstDay.failed_missions) === 0;
+
+  let streak = 0;
+  let expectedDate = today;
+  if (todayCompleted) {
+    for (const day of days) {
+      if (day.mission_date !== expectedDate) break;
+      if (Number(day.completed_missions) !== Number(day.total_missions) || Number(day.failed_missions) > 0) break;
+      streak += 1;
+      expectedDate = getPreviousDate(expectedDate);
+    }
+  }
+
+  const lastCompletedDate = days.find((day) =>
+    Number(day.completed_missions) === Number(day.total_missions)
+    && Number(day.failed_missions) === 0
+  )?.mission_date || null;
+
+  return {
+    streak_days: streak,
+    last_completed_date: lastCompletedDate,
+    status: streak > 0 ? 'active' : firstDay?.failed_missions > 0 ? 'broken' : 'pending',
+  };
+}
+
 async function getDailyStreak(userId) {
   const [days] = await pool.query(
     `SELECT DATE_FORMAT(mission_date, '%Y-%m-%d') AS mission_date,
@@ -109,21 +141,7 @@ async function getDailyStreak(userId) {
     [userId]
   );
 
-  if (!days.length) return 0;
-
-  const today = days[0].today;
-  const firstDay = days.find((day) => day.mission_date === today);
-  if (!firstDay || Number(firstDay.completed_missions) !== Number(firstDay.total_missions)) return 0;
-
-  let streak = 0;
-  let expectedDate = today;
-  for (const day of days) {
-    if (day.mission_date !== expectedDate) break;
-    if (Number(day.completed_missions) !== Number(day.total_missions) || Number(day.failed_missions) > 0) break;
-    streak += 1;
-    expectedDate = getPreviousDate(expectedDate);
-  }
-  return streak;
+  return calculateDailyStreak(days);
 }
 
 async function markExpiredMissions(userId, connection = pool) {
@@ -179,7 +197,7 @@ async function list(req, res, next) {
     return res.json({
       message: 'Data misi berhasil diambil.',
       missions: canonicalCombined,
-      stats: { streak_days: await getDailyStreak(req.user.id) },
+      stats: await getDailyStreak(req.user.id),
     });
 
     // Kept below temporarily for migration compatibility and removed after legacy tables are retired.
@@ -561,4 +579,4 @@ async function cancel(req, res, next) {
   }
 }
 
-module.exports = { list, toggle, cancel };
+module.exports = { list, toggle, cancel, calculateDailyStreak };
