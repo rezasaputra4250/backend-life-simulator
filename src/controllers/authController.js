@@ -361,8 +361,8 @@ async function updateProfile(req, res, next) {
 
     const userFields = ['name', 'email'];
     const profileFields = [
-      'employee_number', 'position', 'department', 'phone', 'gender', 'religion', 'birth_date',
-      'avatar_url', 'address', 'city', 'province', 'country', 'postal_code', 'bio',
+      'employee_number', 'position', 'department', 'phone', 'gender', 'birth_date',
+      'religion', 'avatar_url', 'address', 'city', 'province', 'country', 'postal_code', 'bio',
     ];
     const connection = await pool.getConnection();
     try {

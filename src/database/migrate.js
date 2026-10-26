@@ -92,6 +92,7 @@ async function migrate() {
       department VARCHAR(120) NULL,
       phone VARCHAR(40) NULL,
       gender ENUM('male', 'female', 'other') NULL,
+      religion ENUM('islam', 'kristen', 'katolik', 'hindu', 'buddha', 'konghucu', 'lainnya', 'tidak_menjawab') NULL,
       birth_date DATE NULL,
       avatar_url VARCHAR(255) NULL,
       address TEXT NULL,
@@ -690,6 +691,19 @@ async function migrate() {
   // Drop both tables so existing installations converge with a fresh schema.
   await connection.query('DROP TABLE IF EXISTS todo_items');
   await connection.query('DROP TABLE IF EXISTS todo_lists');
+
+  const [profileColumns] = await connection.query(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'user_profiles'
+       AND COLUMN_NAME = 'religion'`,
+    [env.database.name]
+  );
+  if (!profileColumns.length) {
+    await connection.query(
+      "ALTER TABLE user_profiles ADD COLUMN religion ENUM('islam', 'kristen', 'katolik', 'hindu', 'buddha', 'konghucu', 'lainnya', 'tidak_menjawab') NULL AFTER gender"
+    );
+  }
 
   // Keep timestamps and soft deletes consistent for new and existing tables.
   const managedTables = [
