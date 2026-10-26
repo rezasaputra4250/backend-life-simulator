@@ -1207,7 +1207,7 @@ async function migrate() {
      FROM INFORMATION_SCHEMA.COLUMNS
      WHERE TABLE_SCHEMA = ?
        AND TABLE_NAME = 'missions'
-       AND COLUMN_NAME IN ('category', 'mission_date', 'frequency', 'scheduled_time', 'reward_type', 'reward_name', 'reward_key', 'failed', 'failed_at', 'required_class')`,
+       AND COLUMN_NAME IN ('category', 'mission_date', 'frequency', 'scheduled_time', 'reward_type', 'reward_name', 'reward_key', 'failed', 'failed_at', 'required_class', 'required_religion')`,
     [env.database.name]
   );
   const missionColumnNames = missionColumns.map((column) => column.COLUMN_NAME);
