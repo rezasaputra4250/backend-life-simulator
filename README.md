@@ -68,11 +68,20 @@ Jalankan migrasi untuk membuat database, tabel, struktur relasi, dan data refere
 npm run migrate
 ```
 
-Untuk development baru, data contoh dapat dibuat dengan perintah berikut setelah migrasi:
+Setelah migrasi, gunakan satu perintah berikut. Seeder otomatis memilih profile berdasarkan `APP_ENV` atau `NODE_ENV`:
 
 ```bash
 npm run db:seed
 ```
+
+Pemetaan profile:
+
+| Environment | Seeder yang dijalankan |
+| --- | --- |
+| `local`, `development` | Data referensi, user demo, misi, habit Muslim, dan guild demo |
+| `staging`, `production` | Data referensi yang aman untuk deployment; tanpa data demo |
+
+Seeder production-safe hanya mengisi kurva experience. Data user produksi dibuat melalui registrasi atau proses operasional aplikasi, bukan dari data demo.
 
 Seeder tambahan tersedia untuk kebutuhan tertentu:
 
