@@ -100,7 +100,6 @@ async function migrate() {
       province VARCHAR(120) NULL,
       country VARCHAR(120) NOT NULL DEFAULT 'Indonesia',
       postal_code VARCHAR(20) NULL,
-      religion VARCHAR(40) NULL,
       joined_at DATE NULL,
       bio TEXT NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
