@@ -1,0 +1,134 @@
+{
+  "info": {
+    "_postman_id": "b9a4e1d8-3f8a-4a1f-ae8c-7f8f9a4c2d11",
+    "name": "RPG Life Simulator API",
+    "description": "Postman collection untuk backend RPG Life Simulator. Gunakan baseUrl http://localhost:5000 dan login terlebih dahulu untuk mengisi token.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000" },
+    { "key": "token", "value": "" },
+    { "key": "email", "value": "demo@rpg-life.local" },
+    { "key": "password", "value": "password" },
+    { "key": "missionId", "value": "1" },
+    { "key": "partyId", "value": "1" },
+    { "key": "guildId", "value": "1" },
+    { "key": "userId", "value": "1" },
+    { "key": "requestId", "value": "1" },
+    { "key": "notificationId", "value": "1" },
+    { "key": "accountId", "value": "1" },
+    { "key": "transactionId", "value": "1" },
+    { "key": "classId", "value": "1" },
+    { "key": "templateId", "value": "1" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Petualang Baru\",\n  \"email\": \"petualang@example.com\",\n  \"password\": \"password123\",\n  \"birth_date\": \"1995-01-01\",\n  \"gender\": \"other\",\n  \"religion\": \"islam\"\n}" },
+            "url": "{{baseUrl}}/api/mobile/v1/auth/register"
+          }
+        },
+        {
+          "name": "Login (simpan token otomatis)",
+          "event": [{ "listen": "test", "script": { "exec": ["const json = pm.response.json();", "const token = json.token || (json.data && json.data.token);", "if (token) pm.collectionVariables.set('token', token);"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}" },
+            "url": "{{baseUrl}}/api/mobile/v1/auth/login"
+          }
+        },
+        { "name": "Current User", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/mobile/v1/auth/me" } },
+        { "name": "Forgot Password", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{email}}\"\n}" }, "url": "{{baseUrl}}/api/mobile/v1/auth/forgot-password" } },
+        { "name": "Reset Password", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{email}}\",\n  \"token\": \"reset-token\",\n  \"password\": \"newpassword123\"\n}" }, "url": "{{baseUrl}}/api/mobile/v1/auth/reset-password" } }
+      ]
+    },
+    {
+      "name": "Profile & RPG",
+      "item": [
+        { "name": "Get Profile", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/mobile/v1/me" } },
+        { "name": "Update Profile", "request": { "method": "PATCH", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Petualang Demo\",\n  \"position\": \"Adventurer\",\n  \"department\": \"Guild\",\n  \"religion\": \"islam\",\n  \"bio\": \"Siap menyelesaikan misi.\"\n}" }, "url": "{{baseUrl}}/api/mobile/v1/me/profile" } },
+        { "name": "Change Password", "request": { "method": "PATCH", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"current_password\": \"{{password}}\",\n  \"new_password\": \"newpassword123\",\n  \"confirm_password\": \"newpassword123\"\n}" }, "url": "{{baseUrl}}/api/mobile/v1/me/password" } },
+        { "name": "List Classes", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/mobile/v1/classes" } },
+        { "name": "Select Class", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"class_id\": {{classId}}\n}" }, "url": "{{baseUrl}}/api/mobile/v1/me/class" } },
+        { "name": "Get Progression", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/mobile/v1/me/progression" } },
+        { "name": "Difficulty Configs", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/mobile/v1/difficulty-configs" } },
+        { "name": "Update Difficulty", "request": { "method": "PATCH", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"difficulty\": \"normal\"\n}" }, "url": "{{baseUrl}}/api/mobile/v1/me/difficulty" } },
+        { "name": "Experience History", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/mobile/v1/me/experience-history" } },
+        { "name": "Leaderboards", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/mobile/v1/leaderboards" } }
+      ]
+    },
+    {
+      "name": "Missions",
+      "item": [
+        { "name": "List Missions", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/mobile/v1/missions" } },
+        { "name": "Toggle Mission", "request": { "method": "PATCH", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/mobile/v1/missions/{{missionId}}/toggle" } },
+        { "name": "Cancel Mission", "request": { "method": "PATCH", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/mobile/v1/missions/{{missionId}}/cancel" } },
+        { "name": "Mission Templates", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/mobile/v1/mission-templates" } },
+        { "name": "Create Custom Mission", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"title\": \"Belajar 30 menit\",\n  \"detail\": \"Membaca dokumentasi\",\n  \"difficulty\": \"normal\",\n  \"duration_minutes\": 30,\n  \"reward_xp\": 20,\n  \"frequency\": \"daily\",\n  \"mission_date\": \"2026-10-28\",\n  \"scheduled_time\": \"19:00\"\n}" }, "url": "{{baseUrl}}/api/mobile/v1/missions/custom" } },
+        { "name": "Complete Custom Mission", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/mobile/v1/missions/{{missionId}}/complete" } }
+      ]
+    },
+    {
+      "name": "Inventory, Affiliate & Notifications",
+      "item": [
+        { "name": "Inventory", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/mobile/v1/inventory" } },
+        { "name": "Affiliate Profile", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/mobile/v1/affiliate" } },
+        { "name": "Notifications", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/mobile/v1/notifications" } },
+        { "name": "Mark All Notifications Read", "request": { "method": "PATCH", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/mobile/v1/notifications/read-all" } },
+        { "name": "Mark Notification Read", "request": { "method": "PATCH", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/mobile/v1/notifications/{{notificationId}}/read" } }
+      ]
+    },
+    {
+      "name": "Friends",
+      "item": [
+        { "name": "List Friends", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/mobile/v1/friends" } },
+        { "name": "Search Friends", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/mobile/v1/friends/search?query=demo" } },
+        { "name": "Send Friend Request", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"user_id\": {{userId}}\n}" }, "url": "{{baseUrl}}/api/mobile/v1/friends/requests" } },
+        { "name": "Respond Friend Request", "request": { "method": "PATCH", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"action\": \"accept\"\n}" }, "url": "{{baseUrl}}/api/mobile/v1/friends/requests/{{requestId}}" } },
+        { "name": "Remove Friend", "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/mobile/v1/friends/{{userId}}" } }
+      ]
+    },
+    {
+      "name": "Parties",
+      "item": [
+        { "name": "List Parties", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/mobile/v1/parties" } },
+        { "name": "Create Party", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Party Pagi\",\n  \"max_members\": 5\n}" }, "url": "{{baseUrl}}/api/mobile/v1/parties" } },
+        { "name": "Add Party Member", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"user_id\": {{userId}}\n}" }, "url": "{{baseUrl}}/api/mobile/v1/parties/{{partyId}}/members" } },
+        { "name": "Remove Party Member", "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/mobile/v1/parties/{{partyId}}/members/{{userId}}" } }
+      ]
+    },
+    {
+      "name": "Guilds",
+      "item": [
+        { "name": "List Guilds", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/mobile/v1/guilds" } },
+        { "name": "Search Guilds", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/mobile/v1/guilds/search?query=demo" } },
+        { "name": "Create Guild", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Guild Baru\",\n  \"description\": \"Guild untuk petualang.\"\n}" }, "url": "{{baseUrl}}/api/mobile/v1/guilds" } },
+        { "name": "Update Guild", "request": { "method": "PATCH", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Guild Diperbarui\",\n  \"description\": \"Deskripsi terbaru.\"\n}" }, "url": "{{baseUrl}}/api/mobile/v1/guilds/{{guildId}}" } },
+        { "name": "Request Join Guild", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/mobile/v1/guilds/{{guildId}}/join-requests" } },
+        { "name": "Respond Guild Join Request", "request": { "method": "PATCH", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"action\": \"accept\"\n}" }, "url": "{{baseUrl}}/api/mobile/v1/guilds/join-requests/{{requestId}}" } },
+        { "name": "Create Guild Mission", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"title\": \"Misi Guild\",\n  \"detail\": \"Selesaikan target bersama.\",\n  \"difficulty\": \"normal\",\n  \"reward_xp\": 50,\n  \"target_progress\": 10,\n  \"mission_date\": \"2026-10-28\",\n  \"scheduled_time\": \"19:00\"\n}" }, "url": "{{baseUrl}}/api/mobile/v1/guilds/{{guildId}}/missions" } },
+        { "name": "Contribute Guild Mission", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"amount\": 1\n}" }, "url": "{{baseUrl}}/api/mobile/v1/guilds/{{guildId}}/missions/{{missionId}}/contribute" } },
+        { "name": "Respond Guild Invitation", "request": { "method": "PATCH", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"action\": \"accept\"\n}" }, "url": "{{baseUrl}}/api/mobile/v1/guilds/invitations/{{requestId}}" } },
+        { "name": "Invite Guild Member", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"user_id\": {{userId}}\n}" }, "url": "{{baseUrl}}/api/mobile/v1/guilds/{{guildId}}/invitations" } }
+      ]
+    },
+    {
+      "name": "Finance",
+      "item": [
+        { "name": "Finance Summary", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/mobile/v1/finance" } },
+        { "name": "List Accounts", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/mobile/v1/finance/accounts" } },
+        { "name": "Create Account", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Tabungan\",\n  \"type\": \"bank\"\n}" }, "url": "{{baseUrl}}/api/mobile/v1/finance/accounts" } },
+        { "name": "List Transactions", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/mobile/v1/finance/transactions?limit=20" } },
+        { "name": "Create Transaction", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"type\": \"expense\",\n  \"amount\": 25000,\n  \"account_id\": {{accountId}},\n  \"category\": \"Makanan\",\n  \"description\": \"Makan siang\",\n  \"occurred_at\": \"2026-10-28T12:00:00+07:00\"\n}" }, "url": "{{baseUrl}}/api/mobile/v1/finance/transactions" } },
+        { "name": "Update Transaction", "request": { "method": "PATCH", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"type\": \"expense\",\n  \"amount\": 30000,\n  \"account_id\": {{accountId}},\n  \"category\": \"Makanan\",\n  \"description\": \"Makan siang diperbarui\"\n}" }, "url": "{{baseUrl}}/api/mobile/v1/finance/transactions/{{transactionId}}" } }
+      ]
+    }
+  ]
+}
