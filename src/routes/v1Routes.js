@@ -3,9 +3,11 @@ const { body, param } = require('express-validator');
 const authRoutes = require('./authRoutes');
 const missionRoutes = require('./missionRoutes');
 const inventoryRoutes = require('./inventoryRoutes');
+const affiliateRoutes = require('./affiliateRoutes');
 const friendRoutes = require('./friendRoutes');
 const partyRoutes = require('./partyRoutes');
 const guildRoutes = require('./guildRoutes');
+const financeRoutes = require('./financeRoutes');
 const { authenticate } = require('../middleware/authMiddleware');
 const { requireAdmin } = require('../middleware/adminMiddleware');
 const authController = require('../controllers/authController');
@@ -16,6 +18,25 @@ const adminController = require('../controllers/adminController');
 const { religionValues } = require('../constants/religions');
 
 const router = express.Router();
+
+router.get('/', (req, res) => {
+  res.json({
+    message: 'API mobile v1 berjalan.',
+    data: {
+      version: 'v1',
+      endpoints: {
+        auth: '/api/mobile/v1/auth',
+        profile: '/api/mobile/v1/me',
+        missions: '/api/mobile/v1/missions',
+        inventory: '/api/mobile/v1/inventory',
+        friends: '/api/mobile/v1/friends',
+        parties: '/api/mobile/v1/parties',
+        guilds: '/api/mobile/v1/guilds',
+      },
+    },
+  });
+});
+
 router.use('/auth', authRoutes);
 router.get('/me', authenticate, authController.me);
 router.patch('/me/profile', authenticate, [
@@ -35,9 +56,11 @@ router.patch('/me/password', authenticate, [
 ], authController.changePassword);
 router.use('/missions', missionRoutes);
 router.use('/inventory', inventoryRoutes);
+router.use('/affiliate', affiliateRoutes);
 router.use('/friends', friendRoutes);
 router.use('/parties', partyRoutes);
 router.use('/guilds', guildRoutes);
+router.use('/finance', financeRoutes);
 
 router.get('/classes', authenticate, rpgController.classes);
 router.post('/me/class', authenticate, [body('class_id').isInt({ min: 1 }).withMessage('Class tidak valid.')], rpgController.selectClass);
